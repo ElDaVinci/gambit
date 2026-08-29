@@ -90,18 +90,19 @@ Confirm these are fine.
 
 ---
 
-## Answers (fill in as we decide)
+## Answers (DECIDED 2026-08-29 — see [[Battle Mechanics]] for the authoritative ruleset)
 
 | # | Question                         | Decision |
 |---|----------------------------------|----------|
-| 1 | King rules                       | _tbd_    |
-| 2 | Dice allocation + initiative N   | _tbd_    |
-| 3 | Sum vs highest-die               | _tbd_    |
-| 4 | Ties                             | _tbd_    |
-| 5 | Attacker-loss outcome            | _tbd_    |
-| 6 | Combat ratings                   | _tbd_    |
-| 7 | Variance mitigation              | _tbd_    |
-| 8 | Support bonuses in v1            | _tbd_    |
-| 9 | 50-move counter on failed capture| _tbd_    |
-| 10| Promotion / en passant / castle  | _tbd_    |
-| 11| Build format                     | _tbd_    |
+| 1 | King rules                       | **Classic.** King never rolls, never battled. Check/checkmate/stalemate as standard chess. King captures succeed automatically (no roll). |
+| 2 | Dice allocation                  | **Flat: every piece rolls exactly 1d6.** Attacker 1d6 vs defender 1d6. Piece power stays in mobility only. |
+| 3 | Sum vs highest-die               | N/A — one die each. |
+| 4 | Ties                             | **Re-roll until decided** → clean 50/50. |
+| 5 | Attacker-loss outcome            | **Attacking piece is removed from the board.** Defender stays on its square, unmoved. |
+| 6 | Combat ratings                   | N/A — no per-piece ratings. |
+| 7 | Variance mitigation              | **None in v1.** Pure dice. |
+| 8 | Support bonuses in v1            | **None.** Flat 1d6 is the whole story. |
+| 9 | 50-move counter on failed capture| **Does not reset.** Only pawn moves and successful captures reset it. |
+| 10| Promotion / en passant / castle  | EP = battle. Castling = no battle. Capturing promotion = battle first, promote only on a win. |
+| 10a| In-check play                   | Player keeps making moves until out of check; may risk further pieces on capture attempts; no escape possible = checkmate. |
+| 11| Build format                     | _tbd — leaning single self-contained HTML file (no Node on this machine)_ |
