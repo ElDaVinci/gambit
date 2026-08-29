@@ -99,14 +99,16 @@ body{
 .sq.dark{background:var(--board-dark)}
 .sq:disabled{cursor:default}
 .sq:focus-visible{outline:2px solid var(--brass);outline-offset:-3px;z-index:3}
+/* paint-order puts the stroke BEHIND the fill, so the rim never eats the piece */
 .sq .glyph{
   position:relative;z-index:2;
-  -webkit-text-stroke:2px var(--piece-white-stroke);
   color:var(--piece-white);
-  text-shadow:0 1px 2px rgba(0,0,0,.32);
+  -webkit-text-stroke:3px var(--piece-white-stroke);
+  paint-order:stroke fill;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.35));
   transition:transform .12s ease;
 }
-.sq .glyph.b{ color:var(--piece-black); -webkit-text-stroke:2px var(--piece-black-stroke) }
+.sq .glyph.b{ color:var(--piece-black); -webkit-text-stroke:3px var(--piece-black-stroke) }
 .sq.pickable .glyph{cursor:pointer}
 .sq.pickable:hover .glyph{transform:translateY(-2px)}
 .sq.sel::after{content:"";position:absolute;inset:0;background:var(--sel);z-index:1}
@@ -150,8 +152,8 @@ body{
 .graves{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .grave h3{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 4px}
 .grave .row{font-size:20px;line-height:1.15;min-height:1.3em;word-break:break-all}
-.grave .glyph{-webkit-text-stroke:1.5px var(--piece-white-stroke);color:var(--piece-white)}
-.grave .glyph.b{color:var(--piece-black);-webkit-text-stroke:1.5px var(--piece-black-stroke)}
+.grave .glyph{color:var(--piece-white);-webkit-text-stroke:2px var(--piece-white-stroke);paint-order:stroke fill}
+.grave .glyph.b{color:var(--piece-black);-webkit-text-stroke:2px var(--piece-black-stroke)}
 .grave .adv{font-size:11px;color:var(--muted);font-family:"IBM Plex Mono",monospace}
 
 .log{font-family:"IBM Plex Mono",monospace;font-size:12.5px;max-height:230px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
@@ -182,8 +184,8 @@ details.rules .body li{margin:3px 0}
 }
 .battle .kicker{font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--brass);margin:0}
 .battle .versus{display:flex;align-items:center;justify-content:center;gap:16px;margin:12px 0 4px;font-size:40px;line-height:1}
-.battle .versus .glyph{-webkit-text-stroke:2px var(--piece-white-stroke);color:var(--piece-white)}
-.battle .versus .glyph.b{color:var(--piece-black);-webkit-text-stroke:2px var(--piece-black-stroke)}
+.battle .versus .glyph{color:var(--piece-white);-webkit-text-stroke:3px var(--piece-white-stroke);paint-order:stroke fill}
+.battle .versus .glyph.b{color:var(--piece-black);-webkit-text-stroke:3px var(--piece-black-stroke)}
 .battle .versus .vs{font-family:"Zilla Slab",serif;font-size:14px;color:var(--muted);letter-spacing:.1em}
 .battle .roles{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:14px;padding:0 6px}
 .dice{display:flex;align-items:center;justify-content:center;gap:22px;margin:6px 0 4px}
@@ -911,7 +913,8 @@ function choosePromo(cb){
     b.textContent=WHITE_GLYPH[pp];
     var side = state.turn==="w" ? "white" : "black";
     b.style.color = "var(--piece-"+side+")";
-    b.style.webkitTextStroke = "2px var(--piece-"+side+"-stroke)";
+    b.style.webkitTextStroke = "3px var(--piece-"+side+"-stroke)";
+    b.style.paintOrder = "stroke fill";
     b.setAttribute("aria-label","Promote to "+NAME[pp]);
     b.addEventListener("click",function(){
       ov.classList.remove("show"); wrap.remove();
