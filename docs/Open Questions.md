@@ -105,4 +105,4 @@ Confirm these are fine.
 | 9 | 50-move counter on failed capture| **Does not reset.** Only pawn moves and successful captures reset it. |
 | 10| Promotion / en passant / castle  | EP = battle. Castling = no battle. Capturing promotion = battle first, promote only on a win. |
 | 10a| In-check play                   | Player keeps making moves until out of check; may risk further pieces on capture attempts; no escape possible = checkmate. |
-| 11| Build format                     | _tbd — leaning single self-contained HTML file (no Node on this machine)_ |
+| 11| Build format                     | **Single self-contained `index.html`** (vanilla JS). Built — see repo root. Also published as an Artifact for phone play. |
