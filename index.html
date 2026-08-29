@@ -1,0 +1,993 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Gambit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* ============================================================ GAMBIT
+   Dice Chess — standard chess, but every capture is a 1d6 vs 1d6 battle.
+   Single self-contained file. Vanilla JS. Works desktop + mobile.
+   ============================================================ */
+
+:root{
+  --bg:#ece9df; --surface:#f6f4ec; --surface-2:#e5e0d0; --line:#cec8b5;
+  --ink:#23261f; --ink-soft:#585b4e; --muted:#84887a;
+  --brass:#a9822f; --brass-bright:#c8a24a;
+  --repel:#b0402f; --advance:#5c7f52;
+  --board-light:#dcd4bf; --board-dark:#5a6b5c;
+  --piece-white:#f8f4e7; --piece-white-stroke:#6a6350;
+  --piece-black:#20221c; --piece-black-stroke:#d3cdb7;
+  --sel:rgba(169,130,47,.32); --dot:rgba(92,127,82,.55); --last:rgba(169,130,47,.20);
+  --check:rgba(176,64,47,.30);
+  --shadow:0 1px 2px rgba(30,32,24,.06),0 8px 30px rgba(30,32,24,.10);
+  --radius:10px;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#14161a; --surface:#1c1f25; --surface-2:#262a31; --line:#343943;
+    --ink:#e8e5d9; --ink-soft:#b1ac9c; --muted:#888d97;
+    --brass:#c8a24a; --brass-bright:#e0bd66;
+    --repel:#d15a4b; --advance:#7aa970;
+    --board-light:#b7af99; --board-dark:#43524a;
+    --piece-white:#f2ecdb; --piece-white-stroke:#494535;
+    --piece-black:#181a16; --piece-black-stroke:#b8b49e;
+    --sel:rgba(224,189,102,.30); --dot:rgba(122,169,112,.60); --last:rgba(224,189,102,.16);
+    --check:rgba(209,90,75,.34);
+    --shadow:0 1px 2px rgba(0,0,0,.25),0 10px 34px rgba(0,0,0,.40);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#14161a; --surface:#1c1f25; --surface-2:#262a31; --line:#343943;
+  --ink:#e8e5d9; --ink-soft:#b1ac9c; --muted:#888d97;
+  --brass:#c8a24a; --brass-bright:#e0bd66;
+  --repel:#d15a4b; --advance:#7aa970;
+  --board-light:#b7af99; --board-dark:#43524a;
+  --piece-white:#f2ecdb; --piece-white-stroke:#494535;
+  --piece-black:#181a16; --piece-black-stroke:#b8b49e;
+  --sel:rgba(224,189,102,.30); --dot:rgba(122,169,112,.60); --last:rgba(224,189,102,.16);
+  --check:rgba(209,90,75,.34);
+  --shadow:0 1px 2px rgba(0,0,0,.25),0 10px 34px rgba(0,0,0,.40);
+}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  line-height:1.5; -webkit-text-size-adjust:100%;
+  padding:max(16px,env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+}
+.app{max-width:1000px;margin:0 auto}
+
+/* ---- masthead ---- */
+.masthead{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+.wordmark{font-family:"Zilla Slab",Georgia,serif;font-weight:700;font-size:26px;letter-spacing:.01em;margin:0;line-height:1}
+.wordmark .die{color:var(--brass)}
+.tagline{color:var(--muted);font-size:13.5px;margin:0}
+.mast-spacer{flex:1 1 40px}
+.icon-btn{
+  font:inherit;color:var(--ink-soft);background:var(--surface);border:1px solid var(--line);
+  border-radius:8px;padding:6px 10px;cursor:pointer;font-size:14px;line-height:1;display:inline-flex;
+  align-items:center;gap:6px;box-shadow:var(--shadow)
+}
+.icon-btn:hover{color:var(--ink);border-color:var(--brass)}
+.icon-btn:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+
+/* ---- game grid ---- */
+.game{display:grid;grid-template-columns:minmax(300px,1fr) 296px;gap:22px;align-items:start}
+@media (max-width:800px){ .game{grid-template-columns:1fr;gap:16px} }
+
+/* ---- board ---- */
+.board-wrap{width:100%;max-width:min(76vh,560px);margin-inline:auto}
+@media (max-width:800px){ .board-wrap{max-width:min(94vw,520px)} }
+.coords{display:grid;grid-template-columns:1.4em 1fr;grid-template-rows:1fr 1.4em;gap:4px}
+.rank-labels,.file-labels{display:grid;color:var(--muted);font-family:"IBM Plex Mono",monospace;font-size:11px}
+.rank-labels{grid-row:1;grid-column:1;grid-template-rows:repeat(8,1fr);align-items:center;justify-items:center}
+.file-labels{grid-row:2;grid-column:2;grid-template-columns:repeat(8,1fr);align-items:center;justify-items:center}
+.board{
+  grid-row:1;grid-column:2;
+  display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);
+  aspect-ratio:1;border:1px solid var(--line);border-radius:6px;overflow:hidden;box-shadow:var(--shadow);
+  touch-action:manipulation;
+}
+.sq{
+  position:relative;border:0;padding:0;margin:0;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-size:clamp(22px,7.4vw,44px);line-height:1;
+  background:var(--board-light);
+  -webkit-tap-highlight-color:transparent;
+}
+.sq.dark{background:var(--board-dark)}
+.sq:disabled{cursor:default}
+.sq:focus-visible{outline:2px solid var(--brass);outline-offset:-3px;z-index:3}
+.sq .glyph{
+  position:relative;z-index:2;
+  -webkit-text-stroke:1.4px var(--piece-white-stroke);
+  color:var(--piece-white);
+  text-shadow:0 1px 1px rgba(0,0,0,.18);
+  transition:transform .12s ease;
+}
+.sq .glyph.b{ color:var(--piece-black); -webkit-text-stroke:1.2px var(--piece-black-stroke) }
+.sq.pickable .glyph{cursor:pointer}
+.sq.pickable:hover .glyph{transform:translateY(-2px)}
+.sq.sel::after{content:"";position:absolute;inset:0;background:var(--sel);z-index:1}
+.sq.last::after{content:"";position:absolute;inset:0;background:var(--last);z-index:0}
+.sq.check::after{content:"";position:absolute;inset:0;background:var(--check);z-index:1;
+  box-shadow:inset 0 0 0 3px var(--repel)}
+.sq .move-dot{position:absolute;width:26%;height:26%;border-radius:50%;background:var(--dot);z-index:1}
+.sq .capture-ring{position:absolute;inset:8%;border-radius:50%;border:3px solid var(--dot);z-index:1}
+
+/* ---- rail ---- */
+.rail{display:flex;flex-direction:column;gap:14px;min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow)}
+.card h2{
+  font-family:"IBM Plex Sans";font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--muted);margin:0 0 8px
+}
+.status-line{font-family:"Zilla Slab",Georgia,serif;font-weight:600;font-size:19px;margin:0;text-wrap:balance}
+.status-sub{color:var(--ink-soft);font-size:13px;margin:5px 0 0}
+.turn-chip{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--ink-soft);margin-top:9px}
+.turn-chip .dot{width:11px;height:11px;border-radius:50%;border:1px solid var(--line)}
+.turn-chip .dot.w{background:var(--piece-white)}
+.turn-chip .dot.b{background:var(--piece-black)}
+
+.controls{display:flex;flex-direction:column;gap:8px}
+.btn{
+  font:inherit;font-weight:500;color:var(--ink);background:var(--surface-2);border:1px solid var(--line);
+  border-radius:8px;padding:9px 12px;cursor:pointer;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:8px
+}
+.btn:hover{border-color:var(--brass)}
+.btn:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+.btn.primary{background:var(--brass);color:#1a1710;border-color:transparent;font-weight:600;justify-content:center}
+.btn.primary:hover{background:var(--brass-bright)}
+.switch{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13.5px;color:var(--ink-soft);padding:2px 0}
+.switch input{width:0;height:0;opacity:0;position:absolute}
+.switch .track{width:38px;height:22px;border-radius:11px;background:var(--surface-2);border:1px solid var(--line);position:relative;flex:none;transition:background .15s}
+.switch .track::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--muted);transition:transform .15s,background .15s}
+.switch input:checked+.track{background:color-mix(in srgb,var(--brass) 40%,var(--surface-2))}
+.switch input:checked+.track::after{transform:translateX(16px);background:var(--brass)}
+.switch input:focus-visible+.track{outline:2px solid var(--brass);outline-offset:2px}
+
+.graves{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grave h3{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 4px}
+.grave .row{font-size:20px;line-height:1.15;min-height:1.3em;word-break:break-all}
+.grave .glyph{-webkit-text-stroke:1px var(--piece-white-stroke);color:var(--piece-white)}
+.grave .glyph.b{color:var(--piece-black);-webkit-text-stroke:1px var(--piece-black-stroke)}
+.grave .adv{font-size:11px;color:var(--muted);font-family:"IBM Plex Mono",monospace}
+
+.log{font-family:"IBM Plex Mono",monospace;font-size:12.5px;max-height:230px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
+.log .entry{display:grid;grid-template-columns:2.4em 3.2em 1fr;gap:6px;padding:2px 4px;border-radius:5px;font-variant-numeric:tabular-nums}
+.log .entry:nth-child(odd){background:var(--surface-2)}
+.log .entry .n{color:var(--muted)}
+.log .entry .side{color:var(--ink-soft)}
+.log .entry .mv .ok{color:var(--advance)}
+.log .entry .mv .no{color:var(--repel)}
+.log .empty{color:var(--muted)}
+
+details.rules{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:0 14px;box-shadow:var(--shadow)}
+details.rules summary{cursor:pointer;padding:13px 0;font-family:"IBM Plex Sans";font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);list-style:none;display:flex;justify-content:space-between;align-items:center}
+details.rules summary::-webkit-details-marker{display:none}
+details.rules summary::after{content:"+";font-size:15px}
+details.rules[open] summary::after{content:"\2013"}
+details.rules .body{padding:0 0 14px;font-size:13px;color:var(--ink-soft)}
+details.rules .body ul{margin:6px 0;padding-left:18px}
+details.rules .body li{margin:3px 0}
+
+/* ---- battle overlay ---- */
+.overlay{position:fixed;inset:0;z-index:50;display:none;place-items:center;padding:20px;
+  background:color-mix(in srgb,var(--bg) 62%,transparent);backdrop-filter:blur(3px)}
+.overlay.show{display:grid}
+.battle{
+  width:min(360px,92vw);background:var(--surface);border:1px solid var(--line);border-radius:16px;
+  box-shadow:var(--shadow);padding:22px;text-align:center;
+}
+.battle .kicker{font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--brass);margin:0}
+.battle .versus{display:flex;align-items:center;justify-content:center;gap:16px;margin:12px 0 4px;font-size:40px;line-height:1}
+.battle .versus .glyph{-webkit-text-stroke:1.6px var(--piece-white-stroke);color:var(--piece-white)}
+.battle .versus .glyph.b{color:var(--piece-black);-webkit-text-stroke:1.4px var(--piece-black-stroke)}
+.battle .versus .vs{font-family:"Zilla Slab",serif;font-size:14px;color:var(--muted);letter-spacing:.1em}
+.battle .roles{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:14px;padding:0 6px}
+.dice{display:flex;align-items:center;justify-content:center;gap:22px;margin:6px 0 4px}
+.die{font-size:66px;line-height:1;color:var(--brass);filter:drop-shadow(0 3px 6px rgba(0,0,0,.18))}
+.die.tumble{animation:tumble .5s steps(1) both}
+@keyframes tumble{0%{transform:rotate(-12deg) scale(.9)}50%{transform:rotate(10deg) scale(1.08)}100%{transform:none}}
+.battle .tallies{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-soft);min-height:1.4em;margin-top:2px}
+.battle .verdict{font-family:"Zilla Slab",serif;font-weight:700;font-size:22px;margin:12px 0 2px;min-height:1.2em;text-wrap:balance}
+.battle .verdict.win{color:var(--advance)}
+.battle .verdict.lose{color:var(--repel)}
+.battle .verdict-sub{font-size:12.5px;color:var(--ink-soft);min-height:1.1em}
+.battle .go{margin-top:16px;width:100%}
+
+/* ---- game-over ---- */
+.gameover{position:fixed;inset:0;z-index:60;display:none;place-items:center;padding:20px;
+  background:color-mix(in srgb,var(--bg) 70%,transparent);backdrop-filter:blur(3px)}
+.gameover.show{display:grid}
+.gameover .panel{width:min(360px,92vw);background:var(--surface);border:1px solid var(--line);border-radius:16px;
+  box-shadow:var(--shadow);padding:26px;text-align:center}
+.gameover .panel .result{font-family:"Zilla Slab",serif;font-weight:700;font-size:27px;margin:0 0 6px;text-wrap:balance}
+.gameover .panel .why{color:var(--ink-soft);font-size:14px;margin:0 0 18px}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001ms !important;transition-duration:.001ms !important}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="masthead">
+    <h1 class="wordmark">Gambit<span class="die">.</span></h1>
+    <p class="tagline">Standard chess &mdash; but every capture is a roll of the dice.</p>
+    <span class="mast-spacer"></span>
+    <button class="icon-btn" id="themeBtn" type="button" aria-label="Toggle light or dark theme">
+      <span id="themeIcon">&#9789;</span><span id="themeLabel">Theme</span>
+    </button>
+  </header>
+
+  <main class="game">
+    <section class="board-wrap" aria-label="Chess board">
+      <div class="coords">
+        <div class="rank-labels" id="rankLabels" aria-hidden="true"></div>
+        <div class="board" id="board" role="grid" aria-label="Gambit board"></div>
+        <div class="file-labels" id="fileLabels" aria-hidden="true"></div>
+      </div>
+    </section>
+
+    <aside class="rail">
+      <div class="card">
+        <h2>Status</h2>
+        <p class="status-line" id="statusLine">White to move</p>
+        <p class="status-sub" id="statusSub">Tap a piece to begin.</p>
+        <div class="turn-chip"><span class="dot" id="turnDot"></span><span id="turnText">White&rsquo;s turn</span></div>
+      </div>
+
+      <div class="card">
+        <h2>Last battle</h2>
+        <p class="status-sub" id="battleLog" style="margin:0">No captures attempted yet.</p>
+      </div>
+
+      <div class="card">
+        <h2>Table</h2>
+        <div class="controls">
+          <button class="btn primary" id="newGameBtn" type="button">New game</button>
+          <label class="switch"><span>Rotate board each turn</span>
+            <input type="checkbox" id="rotateToggle"><span class="track"></span></label>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Fallen</h2>
+        <div class="graves">
+          <div class="grave"><h3>White lost</h3><div class="row" id="graveWhite"></div><div class="adv" id="advWhite"></div></div>
+          <div class="grave"><h3>Black lost</h3><div class="row" id="graveBlack"></div><div class="adv" id="advBlack"></div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Moves</h2>
+        <div class="log" id="log"><span class="empty">The game hasn&rsquo;t started.</span></div>
+      </div>
+
+      <details class="rules">
+        <summary>How Gambit differs from chess</summary>
+        <div class="body">
+          <ul>
+            <li>Movement, check, castling, en&nbsp;passant, promotion &mdash; all standard.</li>
+            <li>A capture is a <strong>battle</strong>: attacker rolls 1d6, defender rolls 1d6, ties re-roll &rarr; 50/50.</li>
+            <li>Attacker wins &rarr; normal capture. Attacker loses &rarr; <strong>the attacking piece is removed</strong>; the defender holds its square.</li>
+            <li>The King never rolls. A King capturing a piece succeeds automatically.</li>
+            <li>While your King is in check you keep moving &mdash; risking further pieces if you choose &mdash; until it is safe, or it is checkmate.</li>
+          </ul>
+        </div>
+      </details>
+    </aside>
+  </main>
+</div>
+
+<!-- battle overlay -->
+<div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-label="Capture battle">
+  <div class="battle">
+    <p class="kicker" id="battleKicker">Battle for e5</p>
+    <div class="versus">
+      <span class="glyph" id="atkGlyph">&#9817;</span>
+      <span class="vs">VS</span>
+      <span class="glyph" id="defGlyph">&#9822;</span>
+    </div>
+    <div class="roles"><span>Attacker</span><span>Defender</span></div>
+    <div class="dice"><span class="die" id="dieA">&#9856;</span><span class="die" id="dieD">&#9856;</span></div>
+    <p class="tallies" id="tallies"></p>
+    <p class="verdict" id="verdict"></p>
+    <p class="verdict-sub" id="verdictSub"></p>
+    <button class="btn primary go" id="battleGo" type="button" style="display:none">Continue</button>
+  </div>
+</div>
+
+<!-- game over -->
+<div class="gameover" id="gameover" role="dialog" aria-modal="true" aria-label="Game over">
+  <div class="panel">
+    <p class="result" id="goResult">Checkmate</p>
+    <p class="why" id="goWhy">White wins.</p>
+    <button class="btn primary" id="goNew" type="button">New game</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+(function(){
+/* ================= constants ================= */
+var FILES = "abcdefgh";
+var WHITE_GLYPH = {k:"♔",q:"♕",r:"♖",b:"♗",n:"♘",p:"♙"};
+var BLACK_GLYPH = {k:"♚",q:"♛",r:"♜",b:"♝",n:"♞",p:"♟"};
+var DIE = ["⚀","⚁","⚂","⚃","⚄","⚅"];
+var VAL = {p:1,n:3,b:3,r:5,q:9,k:0};
+var NAME = {p:"Pawn",n:"Knight",b:"Bishop",r:"Rook",q:"Queen",k:"King"};
+
+var START = [
+ "br","bn","bb","bq","bk","bb","bn","br",
+ "bp","bp","bp","bp","bp","bp","bp","bp",
+ "","","","","","","","",
+ "","","","","","","","",
+ "","","","","","","","",
+ "","","","","","","","",
+ "wp","wp","wp","wp","wp","wp","wp","wp",
+ "wr","wn","wb","wq","wk","wb","wn","wr"
+];
+
+var ROOK_DIRS=[[-1,0],[1,0],[0,-1],[0,1]];
+var BISHOP_DIRS=[[-1,-1],[-1,1],[1,-1],[1,1]];
+var KNIGHT_J=[[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+var KING_J=ROOK_DIRS.concat(BISHOP_DIRS);
+
+/* ================= helpers ================= */
+function idx(r,c){return r*8+c;}
+function rowOf(i){return i>>3;}
+function colOf(i){return i&7;}
+function onBoard(r,c){return r>=0&&r<8&&c>=0&&c<8;}
+function opp(c){return c==="w"?"b":"w";}
+function sqName(i){return FILES[colOf(i)]+(8-rowOf(i));}
+function d6(){return 1+Math.floor(Math.random()*6);}
+
+/* ================= game state ================= */
+var state, selected, legalCache, gameOver, busy, rotate, lastMove;
+
+function freshState(){
+  return {
+    board: START.slice(),
+    turn: "w",
+    castling: {wK:true,wQ:true,bK:true,bQ:true},
+    ep: null,
+    halfmove: 0,
+    posCounts: {},
+    graves: {w:[], b:[]},   // piece types this colour has lost (any cause)
+    history: [],
+    continuation: false
+  };
+}
+
+/* ================= move generation ================= */
+function pseudoMoves(st, color){
+  var b=st.board, moves=[], i, r, c;
+  for(i=0;i<64;i++){
+    var pc=b[i]; if(!pc||pc[0]!==color) continue;
+    r=rowOf(i); c=colOf(i); var t=pc[1];
+    if(t==="p") pawnMoves(st,color,r,c,i,moves);
+    else if(t==="n") jumpMoves(b,color,r,c,i,KNIGHT_J,moves,"n");
+    else if(t==="k"){ jumpMoves(b,color,r,c,i,KING_J,moves,"k"); castleMoves(st,color,i,moves); }
+    else slideMoves(b,color,r,c,i,t==="r"?ROOK_DIRS:t==="b"?BISHOP_DIRS:KING_J,moves,t);
+  }
+  return moves;
+}
+function pawnMoves(st,color,r,c,i,moves){
+  var b=st.board, dir=color==="w"?-1:1, startRow=color==="w"?6:1, promoRow=color==="w"?0:7;
+  var f1=r+dir;
+  if(onBoard(f1,c)&&b[idx(f1,c)]===""){
+    addPawn(moves,i,idx(f1,c),f1===promoRow,false,false);
+    var f2=r+2*dir;
+    if(r===startRow&&b[idx(f2,c)]===""){
+      moves.push({from:i,to:idx(f2,c),piece:"p",capture:false,dbl:true});
+    }
+  }
+  [c-1,c+1].forEach(function(cc){
+    if(!onBoard(f1,cc)) return;
+    var tgt=idx(f1,cc), occ=b[tgt];
+    if(occ&&occ[0]===opp(color)){
+      addPawn(moves,i,tgt,f1===promoRow,false,true);
+    } else if(st.ep!==null&&tgt===st.ep){
+      moves.push({from:i,to:tgt,piece:"p",capture:true,ep:true});
+    }
+  });
+}
+function addPawn(moves,from,to,promo,ep,capture){
+  if(promo){
+    ["q","r","b","n"].forEach(function(pp){
+      moves.push({from:from,to:to,piece:"p",capture:capture,promo:pp});
+    });
+  } else {
+    moves.push({from:from,to:to,piece:"p",capture:capture});
+  }
+}
+function jumpMoves(b,color,r,c,i,offs,moves,t){
+  for(var k=0;k<offs.length;k++){
+    var rr=r+offs[k][0], cc=c+offs[k][1];
+    if(!onBoard(rr,cc)) continue;
+    var occ=b[idx(rr,cc)];
+    if(occ===""){ moves.push({from:i,to:idx(rr,cc),piece:t,capture:false}); }
+    else if(occ[0]!==color){ moves.push({from:i,to:idx(rr,cc),piece:t,capture:true}); }
+  }
+}
+function slideMoves(b,color,r,c,i,dirs,moves,t){
+  for(var k=0;k<dirs.length;k++){
+    var rr=r+dirs[k][0], cc=c+dirs[k][1];
+    while(onBoard(rr,cc)){
+      var occ=b[idx(rr,cc)];
+      if(occ===""){ moves.push({from:i,to:idx(rr,cc),piece:t,capture:false}); }
+      else { if(occ[0]!==color) moves.push({from:i,to:idx(rr,cc),piece:t,capture:true}); break; }
+      rr+=dirs[k][0]; cc+=dirs[k][1];
+    }
+  }
+}
+function castleMoves(st,color,i,moves){
+  var home=color==="w"?idx(7,4):idx(0,4);
+  if(i!==home) return;
+  var b=st.board, row=color==="w"?7:0, rights=st.castling;
+  if(rights[color+"K"] && b[idx(row,5)]===""&&b[idx(row,6)]===""&&b[idx(row,7)]===color+"r"){
+    moves.push({from:i,to:idx(row,6),piece:"k",capture:false,castle:"K"});
+  }
+  if(rights[color+"Q"] && b[idx(row,1)]===""&&b[idx(row,2)]===""&&b[idx(row,3)]===""&&b[idx(row,0)]===color+"r"){
+    moves.push({from:i,to:idx(row,2),piece:"k",capture:false,castle:"Q"});
+  }
+}
+
+/* ================= attack detection ================= */
+function isAttacked(b, r, c, by){
+  // pawns
+  var pd = by==="w" ? 1 : -1; // attacker pawn sits one row toward its own side
+  if(onBoard(r+pd,c-1) && b[idx(r+pd,c-1)]===by+"p") return true;
+  if(onBoard(r+pd,c+1) && b[idx(r+pd,c+1)]===by+"p") return true;
+  // knights
+  for(var k=0;k<KNIGHT_J.length;k++){
+    var rr=r+KNIGHT_J[k][0], cc=c+KNIGHT_J[k][1];
+    if(onBoard(rr,cc)&&b[idx(rr,cc)]===by+"n") return true;
+  }
+  // king
+  for(k=0;k<KING_J.length;k++){
+    rr=r+KING_J[k][0]; cc=c+KING_J[k][1];
+    if(onBoard(rr,cc)&&b[idx(rr,cc)]===by+"k") return true;
+  }
+  // bishop / queen diagonals
+  if(rayHit(b,r,c,BISHOP_DIRS,by,"b")) return true;
+  // rook / queen orthogonals
+  if(rayHit(b,r,c,ROOK_DIRS,by,"r")) return true;
+  return false;
+}
+function rayHit(b,r,c,dirs,by,slider){
+  for(var k=0;k<dirs.length;k++){
+    var rr=r+dirs[k][0], cc=c+dirs[k][1];
+    while(onBoard(rr,cc)){
+      var occ=b[idx(rr,cc)];
+      if(occ!==""){
+        if(occ[0]===by && (occ[1]===slider || occ[1]==="q")) return true;
+        break;
+      }
+      rr+=dirs[k][0]; cc+=dirs[k][1];
+    }
+  }
+  return false;
+}
+function kingSq(b,color){
+  for(var i=0;i<64;i++) if(b[i]===color+"k") return i;
+  return -1;
+}
+function inCheck(b,color){
+  var ks=kingSq(b,color);
+  if(ks<0) return false;
+  return isAttacked(b,rowOf(ks),colOf(ks),opp(color));
+}
+
+/* ================= apply a move (pure-ish) ================= */
+/* returns {board,castling,ep,halfmove,captured} ; captureSucceeds only matters for capture moves */
+function applyMove(st, mv, captureSucceeds){
+  var b=st.board.slice();
+  var cast={wK:st.castling.wK,wQ:st.castling.wQ,bK:st.castling.bK,bQ:st.castling.bQ};
+  var ep=null, hm=st.halfmove+1, captured=null;
+  var pc=b[mv.from], color=pc[0], type=pc[1];
+
+  function dropRight(sq){
+    if(sq===idx(7,0)) cast.wQ=false;
+    else if(sq===idx(7,7)) cast.wK=false;
+    else if(sq===idx(0,0)) cast.bQ=false;
+    else if(sq===idx(0,7)) cast.bK=false;
+  }
+
+  if(mv.castle){
+    var row=color==="w"?7:0;
+    b[mv.from]=""; b[mv.to]=color+"k";
+    if(mv.castle==="K"){ b[idx(row,7)]=""; b[idx(row,5)]=color+"r"; }
+    else { b[idx(row,0)]=""; b[idx(row,3)]=color+"r"; }
+    cast[color+"K"]=false; cast[color+"Q"]=false;
+  }
+  else if(mv.capture && !captureSucceeds && type!=="k"){
+    // FAILED capture: attacker vanishes, defender stays
+    b[mv.from]="";
+    captured={color:color,type:type,cause:"repelled"};
+    dropRight(mv.from);
+    // halfmove NOT reset
+  }
+  else {
+    // normal move OR successful capture OR king capture
+    var victim=b[mv.to];
+    if(mv.ep){
+      var capSq=idx(rowOf(mv.from), colOf(mv.to));
+      victim=b[capSq]; b[capSq]="";
+    }
+    if(victim){ captured={color:victim[0],type:victim[1],cause:"captured"}; }
+    b[mv.to]=pc; b[mv.from]="";
+    if(mv.promo) b[mv.to]=color+mv.promo;
+    if(mv.dbl) ep=idx((rowOf(mv.from)+rowOf(mv.to))/2, colOf(mv.to));
+    if(type==="k"){ cast[color+"K"]=false; cast[color+"Q"]=false; }
+    dropRight(mv.from); dropRight(mv.to);
+    if(type==="p" || (mv.capture && captureSucceeds)) hm=0;
+  }
+  return {board:b,castling:cast,ep:ep,halfmove:hm,captured:captured};
+}
+
+/* ================= legal moves ================= */
+function legalMoves(st, color){
+  var ps=pseudoMoves(st,color), out=[], i;
+  for(i=0;i<ps.length;i++){
+    var mv=ps[i];
+    if(mv.castle){
+      var row=color==="w"?7:0, by=opp(color);
+      if(isAttacked(st.board,row,4,by)) continue;
+      if(mv.castle==="K" && (isAttacked(st.board,row,5,by)||isAttacked(st.board,row,6,by))) continue;
+      if(mv.castle==="Q" && (isAttacked(st.board,row,3,by)||isAttacked(st.board,row,2,by))) continue;
+    }
+    var res=applyMove(st,mv,true); // legality assumes the capture succeeds
+    if(!inCheck(res.board,color)) out.push(mv);
+  }
+  return out;
+}
+
+/* ================= notation ================= */
+function longNotation(mv, result){
+  if(mv.castle) return mv.castle==="K"?"O-O":"O-O-O";
+  var pl = mv.piece==="p" ? "" : mv.piece.toUpperCase();
+  var sep = mv.capture ? "x" : "-";
+  var s = pl + sqName(mv.from) + sep + sqName(mv.to);
+  if(mv.promo) s += "="+mv.promo.toUpperCase();
+  if(mv.capture) s += result ? " ✓" : " ✗";
+  return s;
+}
+
+/* ================= position key (threefold) ================= */
+function posKey(st){
+  return st.board.join("")+"|"+st.turn+"|"+st.castling.wK+st.castling.wQ+st.castling.bK+st.castling.bQ+"|"+st.ep;
+}
+
+/* ================= insufficient material ================= */
+function insufficient(b){
+  var w=[], bl=[];
+  for(var i=0;i<64;i++){
+    var pc=b[i]; if(!pc||pc[1]==="k") continue;
+    (pc[0]==="w"?w:bl).push({t:pc[1],sqc:(rowOf(i)+colOf(i))&1});
+  }
+  function loneMinor(arr){ return arr.length===0 || (arr.length===1 && (arr[0].t==="n"||arr[0].t==="b")); }
+  if(!loneMinor(w) || !loneMinor(bl)) return false;
+  // K vs K, K+minor vs K, K+B vs K+B same colour  -> draw
+  if(w.length===1 && bl.length===1 && w[0].t==="b" && bl[0].t==="b" && w[0].sqc!==bl[0].sqc) return false;
+  return true;
+}
+
+/* ================= dice battle (async) ================= */
+var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function battle(atkType, atkColor, defType, defColor, atSq){
+  return new Promise(function(resolve){
+    var ov=document.getElementById("overlay");
+    document.getElementById("battleKicker").textContent="Battle for "+atSq;
+    var ag=document.getElementById("atkGlyph"), dg=document.getElementById("defGlyph");
+    ag.textContent=(atkColor==="w"?WHITE_GLYPH:BLACK_GLYPH)[atkType];
+    ag.className="glyph"+(atkColor==="b"?" b":"");
+    dg.textContent=(defColor==="w"?WHITE_GLYPH:BLACK_GLYPH)[defType];
+    dg.className="glyph"+(defColor==="b"?" b":"");
+    document.getElementById("tallies").textContent="";
+    document.getElementById("verdict").textContent="";
+    document.getElementById("verdict").className="verdict";
+    document.getElementById("verdictSub").textContent="";
+    document.getElementById("battleGo").style.display="none";
+    ov.classList.add("show");
+
+    var dieA=document.getElementById("dieA"), dieD=document.getElementById("dieD");
+    var rounds=[];
+    (function nextRoll(){
+      var a=d6(), bd=d6();
+      rounds.push([a,bd]);
+      spin(dieA,dieD,a,bd,function(){
+        if(a===bd){
+          document.getElementById("tallies").textContent="Tie on "+a+" — re-roll";
+          setTimeout(nextRoll, reduced?150:520);
+        } else {
+          var win=a>bd;
+          var v=document.getElementById("verdict");
+          v.textContent = win ? "Capture!" : "Attack repelled";
+          v.className = "verdict "+(win?"win":"lose");
+          document.getElementById("tallies").textContent =
+            "Attacker "+a+"  ·  Defender "+bd + (rounds.length>1 ? "   ("+rounds.length+" rolls)" : "");
+          document.getElementById("verdictSub").textContent = win
+            ? NAME[atkType]+" takes the "+NAME[defType].toLowerCase()
+            : NAME[atkType]+" is lost; the "+NAME[defType].toLowerCase()+" holds";
+          var go=document.getElementById("battleGo");
+          go.style.display="block";
+          var done=false;
+          function finish(){ if(done) return; done=true; ov.classList.remove("show");
+            ov.removeEventListener("click",finish); go.removeEventListener("click",finish); resolve(win); }
+          go.addEventListener("click",finish);
+          ov.addEventListener("click",finish);
+          if(!reduced) setTimeout(finish, 2000);
+        }
+      });
+    })();
+  });
+}
+function spin(dieA,dieD,a,bd,cb){
+  if(reduced){ dieA.textContent=DIE[a-1]; dieD.textContent=DIE[bd-1]; cb(); return; }
+  dieA.classList.remove("tumble"); dieD.classList.remove("tumble");
+  void dieA.offsetWidth; dieA.classList.add("tumble"); dieD.classList.add("tumble");
+  var n=0, iv=setInterval(function(){
+    dieA.textContent=DIE[Math.floor(Math.random()*6)];
+    dieD.textContent=DIE[Math.floor(Math.random()*6)];
+    if(++n>=6){ clearInterval(iv); dieA.textContent=DIE[a-1]; dieD.textContent=DIE[bd-1]; cb(); }
+  },70);
+}
+
+/* ================= committing a move ================= */
+function movesFrom(sq){
+  return legalCache.filter(function(m){return m.from===sq;});
+}
+function commit(mv){
+  if(busy||gameOver) return;
+  busy=true; selected=null;
+  var b=state.board, pc=b[mv.from], atkColor=pc[0], atkType=pc[1];
+  var isBattle = mv.capture && atkType!=="k";
+
+  if(!isBattle){
+    finalize(mv, true, null);
+    return;
+  }
+  var defSq = mv.ep ? idx(rowOf(mv.from),colOf(mv.to)) : mv.to;
+  var defPc = b[defSq], defType=defPc[1], defColor=defPc[0];
+  render();
+  battle(atkType, atkColor, defType, defColor, sqName(mv.to)).then(function(win){
+    finalize(mv, win, {defType:defType});
+  });
+}
+
+function finalize(mv, success, extra){
+  var moverColor = state.turn;
+  var atkType = (state.board[mv.from] || "  ")[1];
+  var res = applyMove(state, mv, success);
+  state.board = res.board;
+  state.castling = res.castling;
+  state.ep = res.ep;
+  state.halfmove = res.halfmove;
+  if(res.captured){ state.graves[res.captured.color].push(res.captured.type); }
+  lastMove = {from:mv.from, to:mv.to, success:success, capture:!!mv.capture};
+
+  if(mv.capture){
+    var dn = (extra && extra.defType) ? NAME[extra.defType] : "piece";
+    document.getElementById("battleLog").textContent =
+      NAME[atkType] + " vs " + dn + " on " + sqName(mv.to) + " — " + (success ? "captured" : "repelled");
+  }
+
+  var noteResult = mv.capture ? success : null;
+
+  // does the mover's own king stand in check now?
+  var moverInCheck = inCheck(state.board, moverColor);
+  var suffix="";
+  var turnPassed=false;
+
+  if(moverInCheck){
+    state.continuation = true;
+    legalCache = legalMoves(state, moverColor);
+    if(legalCache.length===0){
+      suffix="#";
+      pushHistory(moverColor, mv, noteResult, suffix);
+      busy=false;
+      return endGame("Checkmate", cap(NAME_COLOR(opp(moverColor)))+" wins.");
+    }
+    suffix="+";
+  } else {
+    state.turn = opp(moverColor);
+    state.continuation = false;
+    turnPassed = true;
+    // repetition + draw checks on the new position
+    var key = posKey(state);
+    state.posCounts[key] = (state.posCounts[key]||0)+1;
+    legalCache = legalMoves(state, state.turn);
+    var nextInCheck = inCheck(state.board, state.turn);
+    if(nextInCheck) suffix="+";
+
+    if(legalCache.length===0){
+      if(nextInCheck){
+        suffix="#";
+        pushHistory(moverColor, mv, noteResult, suffix);
+        busy=false;
+        return endGame("Checkmate", cap(NAME_COLOR(moverColor))+" wins.");
+      } else {
+        pushHistory(moverColor, mv, noteResult, "");
+        busy=false;
+        return endGame("Stalemate", "Draw — "+NAME_COLOR(state.turn)+" has no legal move.");
+      }
+    }
+    if(state.posCounts[key] >= 3){
+      pushHistory(moverColor, mv, noteResult, suffix);
+      busy=false;
+      return endGame("Threefold repetition", "Draw — the position has occurred three times.");
+    }
+    if(state.halfmove >= 100){
+      pushHistory(moverColor, mv, noteResult, suffix);
+      busy=false;
+      return endGame("Fifty-move rule", "Draw — 50 moves with no pawn move or capture.");
+    }
+    if(insufficient(state.board)){
+      pushHistory(moverColor, mv, noteResult, suffix);
+      busy=false;
+      return endGame("Insufficient material", "Draw — neither side can deliver mate.");
+    }
+  }
+
+  pushHistory(moverColor, mv, noteResult, suffix);
+  busy=false;
+  render();
+}
+
+function NAME_COLOR(c){return c==="w"?"White":"Black";}
+function cap(s){return s;}
+
+function pushHistory(color, mv, result, suffix){
+  var txt = longNotation(mv, result) + suffix;
+  state.history.push({color:color, txt:txt, cont: state.continuation && inCheck(state.board,color)});
+  renderLog();
+}
+
+/* ================= rendering ================= */
+var boardEl=document.getElementById("board");
+var rankEl=document.getElementById("rankLabels");
+var fileEl=document.getElementById("fileLabels");
+
+function buildBoard(){
+  boardEl.innerHTML="";
+  for(var d=0;d<64;d++){
+    var btn=document.createElement("button");
+    btn.className="sq";
+    btn.type="button";
+    btn.setAttribute("role","gridcell");
+    btn.addEventListener("click", onSquareClick);
+    boardEl.appendChild(btn);
+  }
+}
+function displayIndex(d){ return rotate && state.turn==="b" ? 63-d : d; }
+
+function render(){
+  var flip = rotate && state.turn==="b";
+  // labels
+  rankEl.innerHTML=""; fileEl.innerHTML="";
+  for(var k=0;k<8;k++){
+    var rk=document.createElement("span");
+    rk.textContent = flip ? (k+1) : (8-k);
+    rankEl.appendChild(rk);
+    var fl=document.createElement("span");
+    fl.textContent = flip ? FILES[7-k] : FILES[k];
+    fileEl.appendChild(fl);
+  }
+  var cells=boardEl.children;
+  var checkColor = inCheck(state.board, state.turn) ? state.turn : null;
+  var checkSq = checkColor ? kingSq(state.board, checkColor) : -1;
+  var sel = selected;
+  var targets = sel!=null ? movesFrom(sel) : [];
+  var targetTo = {};
+  targets.forEach(function(m){ targetTo[m.to]=m.capture?"cap":"move"; });
+
+  for(var d=0;d<64;d++){
+    var i=flip?63-d:d;
+    var cell=cells[d];
+    var r=rowOf(i), c=colOf(i);
+    cell.className="sq"+(((r+c)&1)?" dark":"");
+    cell.dataset.i=i;
+    var pc=state.board[i];
+    var inner="";
+    if(pc){
+      var g=(pc[0]==="w"?WHITE_GLYPH:BLACK_GLYPH)[pc[1]];
+      inner='<span class="glyph'+(pc[0]==="b"?" b":"")+'">'+g+'</span>';
+    }
+    if(sel===i) cell.classList.add("sel");
+    if(lastMove && (lastMove.from===i||lastMove.to===i)) cell.classList.add("last");
+    if(i===checkSq) cell.classList.add("check");
+    if(targetTo[i]==="move") inner+='<span class="move-dot"></span>';
+    if(targetTo[i]==="cap") inner+='<span class="capture-ring"></span>';
+    cell.innerHTML=inner;
+
+    var mine = pc && pc[0]===state.turn && !gameOver && !busy;
+    var hasMoves = mine && legalCache.some(function(m){return m.from===i;});
+    if(hasMoves || (sel!=null && targetTo[i])) cell.classList.add("pickable");
+    cell.disabled = gameOver || busy;
+    cell.setAttribute("aria-label", sqName(i)+(pc?(" "+NAME_COLOR(pc[0])+" "+NAME[pc[1]]):" empty"));
+  }
+  renderStatus();
+  renderGraves();
+}
+
+function renderStatus(){
+  var sl=document.getElementById("statusLine");
+  var ss=document.getElementById("statusSub");
+  var td=document.getElementById("turnDot");
+  var tt=document.getElementById("turnText");
+  td.className="dot "+state.turn;
+  tt.textContent = NAME_COLOR(state.turn)+"’s turn";
+  if(gameOver) return;
+  var checked = inCheck(state.board, state.turn);
+  if(state.continuation){
+    sl.textContent = NAME_COLOR(state.turn)+" is in check";
+    ss.textContent = "Play on — keep moving until your King is safe.";
+  } else if(checked){
+    sl.textContent = NAME_COLOR(state.turn)+" is in check";
+    ss.textContent = "Escape the check: move the King, block, or capture the checker.";
+  } else {
+    sl.textContent = NAME_COLOR(state.turn)+" to move";
+    ss.textContent = selected!=null ? "Tap a highlighted square." : "Tap a piece to see its moves.";
+  }
+}
+
+function renderGraves(){
+  ["w","b"].forEach(function(col){
+    var row=document.getElementById(col==="w"?"graveWhite":"graveBlack");
+    var adv=document.getElementById(col==="w"?"advWhite":"advBlack");
+    var list=state.graves[col].slice().sort(function(a,b){return VAL[b]-VAL[a];});
+    row.innerHTML = list.map(function(t){
+      return '<span class="glyph'+(col==="b"?" b":"")+'">'+(col==="w"?WHITE_GLYPH:BLACK_GLYPH)[t]+'</span>';
+    }).join("");
+    var pts=list.reduce(function(s,t){return s+VAL[t];},0);
+    adv.textContent = pts ? ("−"+pts) : "";
+  });
+}
+
+function renderLog(){
+  var el=document.getElementById("log");
+  if(state.history.length===0){ el.innerHTML='<span class="empty">The game hasn’t started.</span>'; return; }
+  var n=0;
+  el.innerHTML = state.history.map(function(h,ix){
+    var label = "";
+    if(!h.cont && h.color==="w"){ n++; label = n+"."; }
+    var mv = h.txt.replace(/✓/g,'<span class="ok">✓</span>').replace(/✗/g,'<span class="no">✗</span>');
+    return '<div class="entry"><span class="n">'+label+'</span>'+
+           '<span class="side">'+(h.color==="w"?"White":"Black")+'</span>'+
+           '<span class="mv">'+mv+'</span></div>';
+  }).join("");
+  el.scrollTop = el.scrollHeight;
+}
+
+/* ================= interaction ================= */
+function onSquareClick(e){
+  if(busy||gameOver) return;
+  var i=parseInt(this.dataset.i,10);
+  var pc=state.board[i];
+  if(selected===null){
+    if(pc && pc[0]===state.turn && legalCache.some(function(m){return m.from===i;})){
+      selected=i; render();
+    }
+    return;
+  }
+  if(i===selected){ selected=null; render(); return; }
+  if(pc && pc[0]===state.turn && legalCache.some(function(m){return m.from===i;})){
+    selected=i; render(); return;
+  }
+  var cands = legalCache.filter(function(m){return m.from===selected && m.to===i;});
+  if(cands.length===0){ selected=null; render(); return; }
+  if(cands.length>1 && cands[0].promo){
+    choosePromo(function(pp){
+      var mv=cands.filter(function(m){return m.promo===pp;})[0] || cands[0];
+      commit(mv);
+    });
+    return;
+  }
+  commit(cands[0]);
+}
+
+function choosePromo(cb){
+  var ov=document.getElementById("overlay");
+  document.getElementById("battleKicker").textContent="Promote to";
+  document.getElementById("atkGlyph").textContent="";
+  document.getElementById("defGlyph").textContent="";
+  document.querySelector(".battle .versus").style.display="none";
+  document.querySelector(".battle .roles").style.display="none";
+  document.querySelector(".battle .dice").style.display="none";
+  document.getElementById("tallies").textContent="";
+  document.getElementById("verdict").textContent="";
+  document.getElementById("verdictSub").textContent="";
+  var go=document.getElementById("battleGo");
+  go.style.display="none";
+  var wrap=document.createElement("div");
+  wrap.className="dice"; wrap.id="promoWrap";
+  ["q","r","b","n"].forEach(function(pp){
+    var b=document.createElement("button");
+    b.className="die"; b.type="button"; b.style.cursor="pointer"; b.style.border="0"; b.style.background="none";
+    b.textContent=(state.turn==="w"?WHITE_GLYPH:BLACK_GLYPH)[pp];
+    b.setAttribute("aria-label","Promote to "+NAME[pp]);
+    b.addEventListener("click",function(){
+      ov.classList.remove("show"); wrap.remove();
+      document.querySelector(".battle .versus").style.display="";
+      document.querySelector(".battle .roles").style.display="";
+      document.querySelector(".battle .dice").style.display="";
+      cb(pp);
+    });
+    wrap.appendChild(b);
+  });
+  document.querySelector(".battle").insertBefore(wrap, go);
+  ov.classList.add("show");
+}
+
+/* ================= game lifecycle ================= */
+function endGame(result, why){
+  gameOver=true;
+  selected=null;
+  render();
+  document.getElementById("goResult").textContent=result;
+  document.getElementById("goWhy").textContent=why;
+  document.getElementById("gameover").classList.add("show");
+}
+
+function newGame(){
+  state=freshState();
+  selected=null; gameOver=false; busy=false; lastMove=null;
+  legalCache=legalMoves(state, state.turn);
+  state.posCounts[posKey(state)]=1;
+  document.getElementById("gameover").classList.remove("show");
+  document.getElementById("battleLog").textContent="No captures attempted yet.";
+  render(); renderLog();
+}
+
+/* battle-log side card: reflect the most recent capture attempt */
+var _origFinalize = finalize;
+
+/* ================= wire up ================= */
+document.getElementById("newGameBtn").addEventListener("click", newGame);
+document.getElementById("goNew").addEventListener("click", newGame);
+
+var rotToggle=document.getElementById("rotateToggle");
+try{ rotate = localStorage.getItem("gambit.rotate")==="1"; }catch(e){ rotate=false; }
+rotToggle.checked=rotate;
+rotToggle.addEventListener("change", function(){
+  rotate=this.checked;
+  try{ localStorage.setItem("gambit.rotate", rotate?"1":"0"); }catch(e){}
+  render();
+});
+
+var themeBtn=document.getElementById("themeBtn");
+function applyTheme(t){
+  if(t==="light"||t==="dark"){ document.documentElement.dataset.theme=t; }
+  else { delete document.documentElement.dataset.theme; }
+  var dark = t==="dark" || (!t && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  document.getElementById("themeIcon").innerHTML = dark ? "&#9788;" : "&#9789;";
+}
+var savedTheme=null;
+try{ savedTheme=localStorage.getItem("gambit.theme"); }catch(e){}
+applyTheme(savedTheme);
+themeBtn.addEventListener("click", function(){
+  var cur=document.documentElement.dataset.theme;
+  var next = cur==="dark" ? "light" : cur==="light" ? "dark" :
+            (window.matchMedia("(prefers-color-scheme: dark)").matches ? "light" : "dark");
+  applyTheme(next);
+  try{ localStorage.setItem("gambit.theme", next); }catch(e){}
+});
+
+buildBoard();
+newGame();
+
+})();
+</script>
+</body>
+</html>
