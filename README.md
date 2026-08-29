@@ -23,14 +23,40 @@ battles first and promotes only on a win.
 
 Full ruleset: [`docs/Battle Mechanics.md`](docs/Battle%20Mechanics.md).
 
+## Install it as an app
+
+Gambit is a PWA, so it installs to a phone or desktop home screen with its own icon,
+opens without browser chrome, and runs offline.
+
+- **iPhone / iPad:** open the site in **Safari** → Share → *Add to Home Screen*.
+  (Safari only — Chrome on iOS cannot install web apps.)
+- **Android:** Chrome offers *Install app*, or use ⋮ → *Add to Home screen*.
+- **Desktop Chrome / Edge:** an install icon appears at the right of the address bar.
+
+Offline support comes from [`sw.js`](sw.js), which caches the app shell. Navigations are
+network-first, so a new version is picked up as soon as you are online; other assets are
+cache-first for instant launches. **Bump `CACHE` in `sw.js` whenever you ship a change** —
+that string is the cache-busting key.
+
 ## Repo layout
 
 | Path | What |
 |---|---|
-| `index.html` | The game. Standalone, double-click to play. |
-| `gambit.artifact.html` | Body-only copy of `index.html` for publishing as an Artifact. Regenerate from `index.html` when it changes (strip the `<!doctype>/<html>/<head>/<body>` wrapper). |
+| `index.html` | The game. Standalone — also runs by double-clicking, no server needed. |
+| `manifest.webmanifest`, `sw.js`, `icons/` | PWA plumbing: install metadata, offline cache, app icons. |
+| `.nojekyll` | Stops GitHub Pages running Jekyll, which would otherwise ignore paths beginning with `_`. |
+| `gambit.artifact.html` | Generated copy for publishing as a Claude Artifact. Never edit by hand — run `bash tools/build-artifact.sh`. |
+| `tools/` | Dev scripts, not part of the app. See below. |
 | `docs/` | Obsidian vault — design, the locked ruleset, decisions, roadmap. Open `docs/` as a vault; start at `docs/Home.md`. |
 | `src/`, `assets/` | Reserved; unused so far. |
+
+### tools/
+
+| Script | Purpose |
+|---|---|
+| `serve.ps1` | Serves the folder at `http://localhost:8100`. Needed because service workers refuse to run from `file://`. Run: `powershell -File tools/serve.ps1` |
+| `make-icons.ps1` | Regenerates `icons/*.png` via System.Drawing. Only needed if the icon design changes. |
+| `build-artifact.sh` | Rebuilds `gambit.artifact.html` from `index.html`. Run after every change to the game. |
 
 ## Playing the computer
 

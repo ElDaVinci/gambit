@@ -5,6 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <title>Gambit</title>
+<meta name="description" content="Standard chess, but every capture is decided by a roll of the dice. Lose the roll and your attacking piece is gone.">
+
+<!-- installable web app -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#ece9df" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14161a" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Gambit">
+<meta name="mobile-web-app-capable" content="yes">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -1240,6 +1252,15 @@ themeBtn.addEventListener("click", function(){
 
 buildBoard();
 newGame();
+
+/* Register the service worker so the game installs and runs offline.
+   Guarded: service workers need a secure origin, so this is a no-op when the
+   file is opened straight off disk (file://) — the game still works fully. */
+if("serviceWorker" in navigator && location.protocol.indexOf("http")===0){
+  window.addEventListener("load", function(){
+    navigator.serviceWorker.register("sw.js").catch(function(){ /* offline support unavailable */ });
+  });
+}
 
 window.__G={freshState:freshState,legalMoves:legalMoves,applyMove:applyMove,opp:opp,
             inCheck:inCheck,chooseBotMove:chooseBotMove,evaluate:evaluate,LEVELS:LEVELS,

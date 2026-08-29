@@ -1,4 +1,6 @@
 <title>Gambit</title>
+<meta name="description" content="Standard chess, but every capture is decided by a roll of the dice. Lose the roll and your attacking piece is gone.">
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -1232,6 +1234,15 @@ themeBtn.addEventListener("click", function(){
 
 buildBoard();
 newGame();
+
+/* Register the service worker so the game installs and runs offline.
+   Guarded: service workers need a secure origin, so this is a no-op when the
+   file is opened straight off disk (file://) — the game still works fully. */
+if("serviceWorker" in navigator && location.protocol.indexOf("http")===0){
+  window.addEventListener("load", function(){
+    navigator.serviceWorker.register("sw.js").catch(function(){ /* offline support unavailable */ });
+  });
+}
 
 window.__G={freshState:freshState,legalMoves:legalMoves,applyMove:applyMove,opp:opp,
             inCheck:inCheck,chooseBotMove:chooseBotMove,evaluate:evaluate,LEVELS:LEVELS,
