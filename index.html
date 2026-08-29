@@ -105,16 +105,22 @@ body{
 .sq.dark{background:var(--board-dark)}
 .sq:disabled{cursor:default}
 .sq:focus-visible{outline:2px solid var(--brass);outline-offset:-3px;z-index:3}
-/* paint-order puts the stroke BEHIND the fill, so the rim never eats the piece */
+/* Pieces are inline SVG, not font glyphs — font glyphs render as colour emoji
+   on some platforms and ignore CSS colour entirely. */
+.glyph{
+  fill:var(--piece-white);
+  stroke:var(--piece-white-stroke);
+  stroke-width:1.6;
+  stroke-linejoin:round;
+  overflow:visible;
+}
+.glyph.b{ fill:var(--piece-black); stroke:var(--piece-black-stroke) }
 .sq .glyph{
   position:relative;z-index:2;
-  color:var(--piece-white);
-  -webkit-text-stroke:3px var(--piece-white-stroke);
-  paint-order:stroke fill;
+  width:80%;height:80%;
   filter:drop-shadow(0 1px 2px rgba(0,0,0,.35));
   transition:transform .12s ease;
 }
-.sq .glyph.b{ color:var(--piece-black); -webkit-text-stroke:3px var(--piece-black-stroke) }
 .sq.pickable .glyph{cursor:pointer}
 .sq.pickable:hover .glyph{transform:translateY(-2px)}
 .sq.sel::after{content:"";position:absolute;inset:0;background:var(--sel);z-index:1}
@@ -157,9 +163,8 @@ body{
 
 .graves{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .grave h3{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 4px}
-.grave .row{font-size:20px;line-height:1.15;min-height:1.3em;word-break:break-all}
-.grave .glyph{color:var(--piece-white);-webkit-text-stroke:2px var(--piece-white-stroke);paint-order:stroke fill}
-.grave .glyph.b{color:var(--piece-black);-webkit-text-stroke:2px var(--piece-black-stroke)}
+.grave .row{display:flex;flex-wrap:wrap;gap:1px;min-height:22px}
+.grave .glyph{width:20px;height:20px;stroke-width:2}
 .grave .adv{font-size:11px;color:var(--muted);font-family:"IBM Plex Mono",monospace}
 
 .log{font-family:"IBM Plex Mono",monospace;font-size:12.5px;max-height:230px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
@@ -189,9 +194,8 @@ details.rules .body li{margin:3px 0}
   box-shadow:var(--shadow);padding:22px;text-align:center;
 }
 .battle .kicker{font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--brass);margin:0}
-.battle .versus{display:flex;align-items:center;justify-content:center;gap:16px;margin:12px 0 4px;font-size:40px;line-height:1}
-.battle .versus .glyph{color:var(--piece-white);-webkit-text-stroke:3px var(--piece-white-stroke);paint-order:stroke fill}
-.battle .versus .glyph.b{color:var(--piece-black);-webkit-text-stroke:3px var(--piece-black-stroke)}
+.battle .versus{display:flex;align-items:center;justify-content:center;gap:16px;margin:12px 0 4px;line-height:1}
+.battle .versus .glyph{width:46px;height:46px}
 .battle .versus .vs{font-family:"Zilla Slab",serif;font-size:14px;color:var(--muted);letter-spacing:.1em}
 .battle .roles{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:14px;padding:0 6px}
 .dice{display:flex;align-items:center;justify-content:center;gap:22px;margin:6px 0 4px}
@@ -220,6 +224,16 @@ details.rules .body li{margin:3px 0}
 </style>
 </head>
 <body>
+<!-- piece shapes: plain solid silhouettes, one closed outline each -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+<path id="pc-p" d="M22.5 5a6 6 0 0 1 3.6 10.8c2.4 1.6 4.2 4.6 4.7 8.4l.8 6h3.4l1.5 5h-28l1.5-5h3.4l.8-6c.5-3.8 2.3-6.8 4.7-8.4A6 6 0 0 1 22.5 5z"/>
+<path id="pc-r" d="M11 10h3.5v3h4v-3h8v3h4v-3H34v7l-2.5 2.5v11L34 33v3l2 4H9l2-4v-3l2.5-2.5v-11L11 17z"/>
+<path id="pc-n" d="M24 6l2.5 4.5c4 2 7 6.5 7 12.5v9l2 4.5h-26l2-4.5v-4c0-5 3-8 6.5-10l-3.5 1c-2 .5-3.5-1-3-3 .5-2.5 3-4.5 6-6 2-1 3.5-2.5 4-4z"/>
+<path id="pc-b" d="M22.5 5.5a2.6 2.6 0 0 1 1.9 4.4c3.4 2.7 6.1 7 6.1 11.4 0 3.4-2 5.9-4.2 7.3l.8 3.3h2.3l2.1 4.5h-18l2.1-4.5h2.3l.8-3.3c-2.2-1.4-4.2-3.9-4.2-7.3 0-4.4 2.7-8.7 6.1-11.4A2.6 2.6 0 0 1 22.5 5.5z"/>
+<path id="pc-q" d="M9.5 10L13 19l3.5-10.5L22.5 18l6-9.5L32 19l3.5-9L34 26l-1 4 2 1v3l2 4H8l2-4v-3l2-1-1-4z"/>
+<path id="pc-k" d="M20.5 3.5h4v3h3v3h-3v3c5 .5 9 4.5 9 9l-1 6.5 2.5 1.5v3l2 4H8l2-4v-3l2.5-1.5-1-6.5c0-4.5 4-8.5 9-9v-3h-3v-3h3z"/>
+</defs></svg>
+
 <div class="app">
   <header class="masthead">
     <h1 class="wordmark">Gambit<span class="die">.</span></h1>
@@ -295,9 +309,9 @@ details.rules .body li{margin:3px 0}
   <div class="battle">
     <p class="kicker" id="battleKicker">Battle for e5</p>
     <div class="versus">
-      <span class="glyph" id="atkGlyph">&#9817;</span>
+      <span id="atkGlyph"></span>
       <span class="vs">VS</span>
-      <span class="glyph" id="defGlyph">&#9822;</span>
+      <span id="defGlyph"></span>
     </div>
     <div class="roles"><span>Attacker</span><span>Defender</span></div>
     <div class="dice"><span class="die" id="dieA">&#9856;</span><span class="die" id="dieD">&#9856;</span></div>
@@ -322,9 +336,11 @@ details.rules .body li{margin:3px 0}
 (function(){
 /* ================= constants ================= */
 var FILES = "abcdefgh";
-/* both sides use the same (solid) glyphs — colour + rim distinguish them */
-var WHITE_GLYPH = {k:"♚",q:"♛",r:"♜",b:"♝",n:"♞",p:"♟"};
-var BLACK_GLYPH = WHITE_GLYPH;
+/* Both sides share one set of SVG silhouettes; only fill + rim differ. */
+function pieceSVG(color, type, extra){
+  return '<svg class="glyph'+(color==="b"?" b":"")+(extra?" "+extra:"")+
+         '" viewBox="0 0 45 45" aria-hidden="true" focusable="false"><use href="#pc-'+type+'"/></svg>';
+}
 var DIE = ["⚀","⚁","⚂","⚃","⚄","⚅"];
 var VAL = {p:1,n:3,b:3,r:5,q:9,k:0};
 var NAME = {p:"Pawn",n:"Knight",b:"Bishop",r:"Rook",q:"Queen",k:"King"};
@@ -592,11 +608,8 @@ function battle(atkType, atkColor, defType, defColor, atSq){
   return new Promise(function(resolve){
     var ov=document.getElementById("overlay");
     document.getElementById("battleKicker").textContent="Battle for "+atSq;
-    var ag=document.getElementById("atkGlyph"), dg=document.getElementById("defGlyph");
-    ag.textContent=(atkColor==="w"?WHITE_GLYPH:BLACK_GLYPH)[atkType];
-    ag.className="glyph"+(atkColor==="b"?" b":"");
-    dg.textContent=(defColor==="w"?WHITE_GLYPH:BLACK_GLYPH)[defType];
-    dg.className="glyph"+(defColor==="b"?" b":"");
+    document.getElementById("atkGlyph").innerHTML=pieceSVG(atkColor, atkType);
+    document.getElementById("defGlyph").innerHTML=pieceSVG(defColor, defType);
     document.getElementById("tallies").textContent="";
     document.getElementById("verdict").textContent="";
     document.getElementById("verdict").className="verdict";
@@ -803,10 +816,7 @@ function render(){
     cell.dataset.i=i;
     var pc=state.board[i];
     var inner="";
-    if(pc){
-      var g=(pc[0]==="w"?WHITE_GLYPH:BLACK_GLYPH)[pc[1]];
-      inner='<span class="glyph'+(pc[0]==="b"?" b":"")+'">'+g+'</span>';
-    }
+    if(pc){ inner=pieceSVG(pc[0], pc[1]); }
     if(sel===i) cell.classList.add("sel");
     if(lastMove && (lastMove.from===i||lastMove.to===i)) cell.classList.add("last");
     if(i===checkSq) cell.classList.add("check");
@@ -850,9 +860,7 @@ function renderGraves(){
     var row=document.getElementById(col==="w"?"graveWhite":"graveBlack");
     var adv=document.getElementById(col==="w"?"advWhite":"advBlack");
     var list=state.graves[col].slice().sort(function(a,b){return VAL[b]-VAL[a];});
-    row.innerHTML = list.map(function(t){
-      return '<span class="glyph'+(col==="b"?" b":"")+'">'+(col==="w"?WHITE_GLYPH:BLACK_GLYPH)[t]+'</span>';
-    }).join("");
+    row.innerHTML = list.map(function(t){ return pieceSVG(col, t); }).join("");
     var pts=list.reduce(function(s,t){return s+VAL[t];},0);
     adv.textContent = pts ? ("−"+pts) : "";
   });
@@ -903,8 +911,8 @@ function onSquareClick(e){
 function choosePromo(cb){
   var ov=document.getElementById("overlay");
   document.getElementById("battleKicker").textContent="Promote to";
-  document.getElementById("atkGlyph").textContent="";
-  document.getElementById("defGlyph").textContent="";
+  document.getElementById("atkGlyph").innerHTML="";
+  document.getElementById("defGlyph").innerHTML="";
   document.querySelector(".battle .versus").style.display="none";
   document.querySelector(".battle .roles").style.display="none";
   document.querySelector(".battle .dice").style.display="none";
@@ -917,12 +925,11 @@ function choosePromo(cb){
   wrap.className="dice"; wrap.id="promoWrap";
   ["q","r","b","n"].forEach(function(pp){
     var b=document.createElement("button");
-    b.className="die"; b.type="button"; b.style.cursor="pointer"; b.style.border="0"; b.style.background="none";
-    b.textContent=WHITE_GLYPH[pp];
-    var side = state.turn==="w" ? "white" : "black";
-    b.style.color = "var(--piece-"+side+")";
-    b.style.webkitTextStroke = "3px var(--piece-"+side+"-stroke)";
-    b.style.paintOrder = "stroke fill";
+    b.type="button"; b.style.cursor="pointer"; b.style.border="0"; b.style.background="none";
+    b.style.padding="0"; b.style.width="52px"; b.style.height="52px";
+    b.innerHTML=pieceSVG(state.turn, pp);
+    b.querySelector("svg").style.width="100%";
+    b.querySelector("svg").style.height="100%";
     b.setAttribute("aria-label","Promote to "+NAME[pp]);
     b.addEventListener("click",function(){
       ov.classList.remove("show"); wrap.remove();
