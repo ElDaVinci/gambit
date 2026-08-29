@@ -32,8 +32,19 @@ Full ruleset: [`docs/Battle Mechanics.md`](docs/Battle%20Mechanics.md).
 | `docs/` | Obsidian vault — design, the locked ruleset, decisions, roadmap. Open `docs/` as a vault; start at `docs/Home.md`. |
 | `src/`, `assets/` | Reserved; unused so far. |
 
+## Playing the computer
+
+Turn on **Play against the computer** in the Table panel. Four strengths (Easy, Medium,
+Hard, Master) and you can hand either colour to the bot.
+
+The engine is an **expectiminimax** search, not plain minimax — that matters here. Every
+capture is a chance node with two equally likely outcomes, so the bot plays the *expected*
+value of an attack (`EV = ½·victim − ½·attacker`). In practice it only starts a fight it
+is worth losing: it will happily throw a pawn at your queen and will not throw its queen
+at your pawn. Details and benchmarks in [`docs/Roadmap.md`](docs/Roadmap.md).
+
 ## Status
 
-**v1 playable.** Two-player hotseat. Chess engine is perft-verified (perft 1–4 and the
-Kiwipete position match standard chess exactly). Next up is playtesting the feel of
+**v1 playable**, hotseat or vs. computer. Chess engine is perft-verified (perft 1–4 and
+the Kiwipete position match standard chess exactly). Next up is playtesting the feel of
 50/50-on-every-capture and tuning from there — see [`docs/Roadmap.md`](docs/Roadmap.md).

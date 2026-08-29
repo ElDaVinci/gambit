@@ -151,6 +151,17 @@ body{
 .switch input{width:0;height:0;opacity:0;position:absolute}
 .switch .track{width:38px;height:22px;border-radius:11px;background:var(--surface-2);border:1px solid var(--line);position:relative;flex:none;transition:background .15s}
 .switch .track::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--muted);transition:transform .15s,background .15s}
+.fields{display:flex;flex-direction:column;gap:8px;padding:2px 0 4px}
+.field{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13.5px;color:var(--ink-soft)}
+.field select{
+  font:inherit;font-size:13px;color:var(--ink);background:var(--surface-2);
+  border:1px solid var(--line);border-radius:7px;padding:5px 8px;cursor:pointer;min-width:112px
+}
+.field select:hover{border-color:var(--brass)}
+.field select:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+.thinking{display:inline-flex;align-items:center;gap:7px;color:var(--brass);font-size:13px;margin-top:9px}
+.thinking .pulse{width:8px;height:8px;border-radius:50%;background:var(--brass);animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.3}50%{opacity:1}}
 .switch input:checked+.track{background:color-mix(in srgb,var(--brass) 40%,var(--surface-2))}
 .switch input:checked+.track::after{transform:translateX(16px);background:var(--brass)}
 .switch input:focus-visible+.track{outline:2px solid var(--brass);outline-offset:2px}
@@ -262,6 +273,24 @@ details.rules .body li{margin:3px 0}
         <h2>Table</h2>
         <div class="controls">
           <button class="btn primary" id="newGameBtn" type="button">New game</button>
+          <label class="switch"><span>Play against the computer</span>
+            <input type="checkbox" id="botToggle"><span class="track"></span></label>
+          <div class="fields" id="botOpts" hidden>
+            <label class="field"><span>Strength</span>
+              <select id="botLevel">
+                <option value="easy">Easy</option>
+                <option value="medium" selected>Medium</option>
+                <option value="hard">Hard</option>
+                <option value="master">Master</option>
+              </select>
+            </label>
+            <label class="field"><span>Computer plays</span>
+              <select id="botSide">
+                <option value="b" selected>Black</option>
+                <option value="w">White</option>
+              </select>
+            </label>
+          </div>
           <label class="switch"><span>Rotate board each turn</span>
             <input type="checkbox" id="rotateToggle"><span class="track"></span></label>
         </div>
@@ -751,6 +780,7 @@ function finalize(mv, success, extra){
   pushHistory(moverColor, mv, noteResult, suffix);
   busy=false;
   render();
+  maybeBot();
 }
 
 function NAME_COLOR(c){return c==="w"?"White":"Black";}
@@ -832,8 +862,14 @@ function renderStatus(){
   var td=document.getElementById("turnDot");
   var tt=document.getElementById("turnText");
   td.className="dot "+state.turn;
-  tt.textContent = NAME_COLOR(state.turn)+"’s turn";
+  tt.textContent = NAME_COLOR(state.turn)+"’s turn"+
+    (botOn ? (state.turn===botSide ? " · computer" : " · you") : "");
   if(gameOver) return;
+  if(thinking){
+    sl.textContent = "Computer is thinking";
+    ss.innerHTML = '<span class="thinking"><span class="pulse"></span>Weighing the odds…</span>';
+    return;
+  }
   var checked = inCheck(state.board, state.turn);
   if(state.continuation){
     sl.textContent = NAME_COLOR(state.turn)+" is in check";
@@ -871,6 +907,179 @@ function renderLog(){
            '<span class="mv">'+mv+'</span></div>';
   }).join("");
   el.scrollTop = el.scrollHeight;
+}
+
+/* ================= computer opponent =================
+   Expectiminimax. Every capture is a chance node: 50% the attacker takes the
+   square, 50% the attacker is removed. So the engine plays the *expected*
+   value of an attack, which is what makes it respect the Gambit maths —
+   trading down is a losing proposition even when the capture "looks" good. */
+
+var PVAL={p:100,n:320,b:330,r:500,q:900,k:0};
+
+/* piece-square tables, white's view, index 0 = a8 */
+var PST={
+p:[  0,  0,  0,  0,  0,  0,  0,  0,
+    50, 50, 50, 50, 50, 50, 50, 50,
+    10, 10, 20, 30, 30, 20, 10, 10,
+     5,  5, 10, 25, 25, 10,  5,  5,
+     0,  0,  0, 20, 20,  0,  0,  0,
+     5, -5,-10,  0,  0,-10, -5,  5,
+     5, 10, 10,-20,-20, 10, 10,  5,
+     0,  0,  0,  0,  0,  0,  0,  0],
+n:[-50,-40,-30,-30,-30,-30,-40,-50,
+   -40,-20,  0,  0,  0,  0,-20,-40,
+   -30,  0, 10, 15, 15, 10,  0,-30,
+   -30,  5, 15, 20, 20, 15,  5,-30,
+   -30,  0, 15, 20, 20, 15,  0,-30,
+   -30,  5, 10, 15, 15, 10,  5,-30,
+   -40,-20,  0,  5,  5,  0,-20,-40,
+   -50,-40,-30,-30,-30,-30,-40,-50],
+b:[-20,-10,-10,-10,-10,-10,-10,-20,
+   -10,  0,  0,  0,  0,  0,  0,-10,
+   -10,  0,  5, 10, 10,  5,  0,-10,
+   -10,  5,  5, 10, 10,  5,  5,-10,
+   -10,  0, 10, 10, 10, 10,  0,-10,
+   -10, 10, 10, 10, 10, 10, 10,-10,
+   -10,  5,  0,  0,  0,  0,  5,-10,
+   -20,-10,-10,-10,-10,-10,-10,-20],
+r:[  0,  0,  0,  0,  0,  0,  0,  0,
+     5, 10, 10, 10, 10, 10, 10,  5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+     0,  0,  0,  5,  5,  0,  0,  0],
+q:[-20,-10,-10, -5, -5,-10,-10,-20,
+   -10,  0,  0,  0,  0,  0,  0,-10,
+   -10,  0,  5,  5,  5,  5,  0,-10,
+    -5,  0,  5,  5,  5,  5,  0, -5,
+     0,  0,  5,  5,  5,  5,  0, -5,
+   -10,  5,  5,  5,  5,  5,  0,-10,
+   -10,  0,  5,  0,  0,  0,  0,-10,
+   -20,-10,-10, -5, -5,-10,-10,-20],
+k:[-30,-40,-40,-50,-50,-40,-40,-30,
+   -30,-40,-40,-50,-50,-40,-40,-30,
+   -30,-40,-40,-50,-50,-40,-40,-30,
+   -30,-40,-40,-50,-50,-40,-40,-30,
+   -20,-30,-30,-40,-40,-30,-30,-20,
+   -10,-20,-20,-20,-20,-20,-20,-10,
+    20, 20,  0,  0,  0,  0, 20, 20,
+    20, 30, 10,  0,  0, 10, 30, 20]
+};
+
+var LEVELS={
+  easy:  {depth:1, random:0.45, budget:  30000},
+  medium:{depth:2, random:0.12, budget: 150000},
+  hard:  {depth:3, random:0,    budget: 500000},
+  master:{depth:4, random:0,    budget: 900000}   /* ~2.5s worst case */
+};
+
+var MATE=100000, nodes=0, nodeBudget=0;
+
+function mkState(res, turn){
+  return {board:res.board, castling:res.castling, ep:res.ep, halfmove:res.halfmove, turn:turn};
+}
+
+/* score from the perspective of the side to move */
+function evaluate(st){
+  var b=st.board, me=st.turn, s=0;
+  for(var i=0;i<64;i++){
+    var pc=b[i]; if(!pc) continue;
+    var c=pc[0], t=pc[1];
+    var pi = c==="w" ? i : ((7-(i>>3))*8 + (i&7));
+    var v = PVAL[t] + PST[t][pi];
+    s += (c===me) ? v : -v;
+  }
+  return s;
+}
+
+function orderMoves(st, moves){
+  var b=st.board;
+  for(var i=0;i<moves.length;i++){
+    var m=moves[i], atk=PVAL[b[m.from][1]];
+    if(m.capture){
+      var victim = m.ep ? PVAL.p : (b[m.to] ? PVAL[b[m.to][1]] : 0);
+      m._s = 10000 + (victim - atk);   /* best expected value first */
+    } else if(m.promo){ m._s = 5000; }
+    else { m._s = 0; }
+  }
+  moves.sort(function(a,c){ return c._s - a._s; });
+}
+
+function negamax(st, depth, alpha, beta){
+  if(++nodes > nodeBudget) return evaluate(st);
+  if(depth<=0) return evaluate(st);
+  var moves = legalMoves(st, st.turn);
+  if(moves.length===0){
+    return inCheck(st.board, st.turn) ? -(MATE+depth) : 0;   /* mate or stalemate */
+  }
+  orderMoves(st, moves);
+  var best=-Infinity;
+  for(var i=0;i<moves.length;i++){
+    var v = moveValue(st, moves[i], depth, alpha, beta);
+    if(v>best) best=v;
+    if(best>alpha) alpha=best;
+    if(alpha>=beta) break;
+  }
+  return best;
+}
+
+/* a capture is a chance node — average the two equally likely outcomes.
+   No alpha-beta window is passed into a chance node's children: pruning is
+   only sound once both branches are known. */
+function moveValue(st, mv, depth, alpha, beta){
+  var isBattle = mv.capture && st.board[mv.from][1]!=="k";
+  if(!isBattle) return afterMove(st, mv, true, depth, alpha, beta);
+  var won  = afterMove(st, mv, true,  depth, -Infinity, Infinity);
+  var lost = afterMove(st, mv, false, depth, -Infinity, Infinity);
+  return 0.5*won + 0.5*lost;
+}
+
+function afterMove(st, mv, success, depth, alpha, beta){
+  var mover = st.turn;
+  var res = applyMove(st, mv, success);
+  /* Gambit rule: a failed capture that exposes your own king leaves you on
+     move — you keep playing until the king is safe. Same side, not negated. */
+  if(inCheck(res.board, mover)){
+    return negamax(mkState(res, mover), depth-1, alpha, beta);
+  }
+  return -negamax(mkState(res, opp(mover)), depth-1, -beta, -alpha);
+}
+
+function chooseBotMove(st, levelKey){
+  var cfg = LEVELS[levelKey] || LEVELS.medium;
+  var moves = legalMoves(st, st.turn);
+  if(moves.length===0) return null;
+  if(cfg.random>0 && Math.random()<cfg.random){
+    return moves[Math.floor(Math.random()*moves.length)];
+  }
+  nodes=0; nodeBudget=cfg.budget;
+  orderMoves(st, moves);
+  var bestVal=-Infinity, best=[];
+  for(var i=0;i<moves.length;i++){
+    var v = moveValue(st, moves[i], cfg.depth, -Infinity, Infinity);
+    if(v > bestVal+1e-9){ bestVal=v; best=[moves[i]]; }
+    else if(Math.abs(v-bestVal)<1e-9){ best.push(moves[i]); }
+  }
+  return best[Math.floor(Math.random()*best.length)];   /* vary equal choices */
+}
+
+var botOn=false, botSide="b", botLevel="medium", thinking=false;
+
+function maybeBot(){
+  if(!botOn || gameOver || busy || thinking) return;
+  if(state.turn !== botSide) return;
+  thinking=true; busy=true;
+  render();
+  setTimeout(function(){
+    var mv=null;
+    try { mv = chooseBotMove(state, botLevel); }
+    catch(err){ mv = null; }
+    thinking=false; busy=false;
+    if(mv) commit(mv); else render();
+  }, 160);
 }
 
 /* ================= interaction ================= */
@@ -948,12 +1157,13 @@ function endGame(result, why){
 
 function newGame(){
   state=freshState();
-  selected=null; gameOver=false; busy=false; lastMove=null;
+  selected=null; gameOver=false; busy=false; thinking=false; lastMove=null;
   legalCache=legalMoves(state, state.turn);
   state.posCounts[posKey(state)]=1;
   document.getElementById("gameover").classList.remove("show");
   document.getElementById("battleLog").textContent="No captures attempted yet.";
   render(); renderLog();
+  maybeBot();
 }
 
 /* battle-log side card: reflect the most recent capture attempt */
@@ -962,6 +1172,36 @@ var _origFinalize = finalize;
 /* ================= wire up ================= */
 document.getElementById("newGameBtn").addEventListener("click", newGame);
 document.getElementById("goNew").addEventListener("click", newGame);
+
+/* ---- computer opponent controls ---- */
+var botToggle=document.getElementById("botToggle");
+var botOpts=document.getElementById("botOpts");
+var botLevelSel=document.getElementById("botLevel");
+var botSideSel=document.getElementById("botSide");
+
+function loadPref(k,d){ try{ var v=localStorage.getItem(k); return v===null?d:v; }catch(e){ return d; } }
+function savePref(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+
+botOn    = loadPref("gambit.bot","0")==="1";
+botLevel = loadPref("gambit.botLevel","medium");
+botSide  = loadPref("gambit.botSide","b");
+botToggle.checked=botOn;
+botLevelSel.value=botLevel;
+botSideSel.value=botSide;
+botOpts.hidden=!botOn;
+
+botToggle.addEventListener("change", function(){
+  botOn=this.checked; botOpts.hidden=!botOn;
+  savePref("gambit.bot", botOn?"1":"0");
+  render(); maybeBot();
+});
+botLevelSel.addEventListener("change", function(){
+  botLevel=this.value; savePref("gambit.botLevel", botLevel);
+});
+botSideSel.addEventListener("change", function(){
+  botSide=this.value; savePref("gambit.botSide", botSide);
+  render(); maybeBot();
+});
 
 var rotToggle=document.getElementById("rotateToggle");
 try{ rotate = localStorage.getItem("gambit.rotate")==="1"; }catch(e){ rotate=false; }
@@ -992,6 +1232,10 @@ themeBtn.addEventListener("click", function(){
 
 buildBoard();
 newGame();
+
+window.__G={freshState:freshState,legalMoves:legalMoves,applyMove:applyMove,opp:opp,
+            inCheck:inCheck,chooseBotMove:chooseBotMove,evaluate:evaluate,LEVELS:LEVELS,
+            getNodes:function(){return nodes;}};
 
 })();
 </script>
