@@ -19,9 +19,9 @@
   --ink:#23261f; --ink-soft:#585b4e; --muted:#84887a;
   --brass:#a9822f; --brass-bright:#c8a24a;
   --repel:#b0402f; --advance:#5c7f52;
-  --board-light:#dcd4bf; --board-dark:#5a6b5c;
-  --piece-white:#f8f4e7; --piece-white-stroke:#6a6350;
-  --piece-black:#20221c; --piece-black-stroke:#d3cdb7;
+  --board-light:#e1d9c4; --board-dark:#55675a;
+  --piece-white:#fdfbf3; --piece-white-stroke:#433d2e;
+  --piece-black:#14150f; --piece-black-stroke:#efe9d4;
   --sel:rgba(169,130,47,.32); --dot:rgba(92,127,82,.55); --last:rgba(169,130,47,.20);
   --check:rgba(176,64,47,.30);
   --shadow:0 1px 2px rgba(30,32,24,.06),0 8px 30px rgba(30,32,24,.10);
@@ -33,9 +33,9 @@
     --ink:#e8e5d9; --ink-soft:#b1ac9c; --muted:#888d97;
     --brass:#c8a24a; --brass-bright:#e0bd66;
     --repel:#d15a4b; --advance:#7aa970;
-    --board-light:#b7af99; --board-dark:#43524a;
-    --piece-white:#f2ecdb; --piece-white-stroke:#494535;
-    --piece-black:#181a16; --piece-black-stroke:#b8b49e;
+    --board-light:#cbc0a5; --board-dark:#39493f;
+    --piece-white:#f8f4e8; --piece-white-stroke:#2c2921;
+    --piece-black:#131410; --piece-black-stroke:#e0d9c2;
     --sel:rgba(224,189,102,.30); --dot:rgba(122,169,112,.60); --last:rgba(224,189,102,.16);
     --check:rgba(209,90,75,.34);
     --shadow:0 1px 2px rgba(0,0,0,.25),0 10px 34px rgba(0,0,0,.40);
@@ -46,9 +46,9 @@
   --ink:#e8e5d9; --ink-soft:#b1ac9c; --muted:#888d97;
   --brass:#c8a24a; --brass-bright:#e0bd66;
   --repel:#d15a4b; --advance:#7aa970;
-  --board-light:#b7af99; --board-dark:#43524a;
-  --piece-white:#f2ecdb; --piece-white-stroke:#494535;
-  --piece-black:#181a16; --piece-black-stroke:#b8b49e;
+  --board-light:#cbc0a5; --board-dark:#39493f;
+  --piece-white:#f8f4e8; --piece-white-stroke:#2c2921;
+  --piece-black:#131410; --piece-black-stroke:#e0d9c2;
   --sel:rgba(224,189,102,.30); --dot:rgba(122,169,112,.60); --last:rgba(224,189,102,.16);
   --check:rgba(209,90,75,.34);
   --shadow:0 1px 2px rgba(0,0,0,.25),0 10px 34px rgba(0,0,0,.40);
@@ -107,12 +107,12 @@ body{
 .sq:focus-visible{outline:2px solid var(--brass);outline-offset:-3px;z-index:3}
 .sq .glyph{
   position:relative;z-index:2;
-  -webkit-text-stroke:1.4px var(--piece-white-stroke);
+  -webkit-text-stroke:2px var(--piece-white-stroke);
   color:var(--piece-white);
-  text-shadow:0 1px 1px rgba(0,0,0,.18);
+  text-shadow:0 1px 2px rgba(0,0,0,.32);
   transition:transform .12s ease;
 }
-.sq .glyph.b{ color:var(--piece-black); -webkit-text-stroke:1.2px var(--piece-black-stroke) }
+.sq .glyph.b{ color:var(--piece-black); -webkit-text-stroke:2px var(--piece-black-stroke) }
 .sq.pickable .glyph{cursor:pointer}
 .sq.pickable:hover .glyph{transform:translateY(-2px)}
 .sq.sel::after{content:"";position:absolute;inset:0;background:var(--sel);z-index:1}
@@ -156,8 +156,8 @@ body{
 .graves{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .grave h3{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 4px}
 .grave .row{font-size:20px;line-height:1.15;min-height:1.3em;word-break:break-all}
-.grave .glyph{-webkit-text-stroke:1px var(--piece-white-stroke);color:var(--piece-white)}
-.grave .glyph.b{color:var(--piece-black);-webkit-text-stroke:1px var(--piece-black-stroke)}
+.grave .glyph{-webkit-text-stroke:1.5px var(--piece-white-stroke);color:var(--piece-white)}
+.grave .glyph.b{color:var(--piece-black);-webkit-text-stroke:1.5px var(--piece-black-stroke)}
 .grave .adv{font-size:11px;color:var(--muted);font-family:"IBM Plex Mono",monospace}
 
 .log{font-family:"IBM Plex Mono",monospace;font-size:12.5px;max-height:230px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
@@ -188,8 +188,8 @@ details.rules .body li{margin:3px 0}
 }
 .battle .kicker{font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--brass);margin:0}
 .battle .versus{display:flex;align-items:center;justify-content:center;gap:16px;margin:12px 0 4px;font-size:40px;line-height:1}
-.battle .versus .glyph{-webkit-text-stroke:1.6px var(--piece-white-stroke);color:var(--piece-white)}
-.battle .versus .glyph.b{color:var(--piece-black);-webkit-text-stroke:1.4px var(--piece-black-stroke)}
+.battle .versus .glyph{-webkit-text-stroke:2px var(--piece-white-stroke);color:var(--piece-white)}
+.battle .versus .glyph.b{color:var(--piece-black);-webkit-text-stroke:2px var(--piece-black-stroke)}
 .battle .versus .vs{font-family:"Zilla Slab",serif;font-size:14px;color:var(--muted);letter-spacing:.1em}
 .battle .roles{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:14px;padding:0 6px}
 .dice{display:flex;align-items:center;justify-content:center;gap:22px;margin:6px 0 4px}
@@ -320,8 +320,9 @@ details.rules .body li{margin:3px 0}
 (function(){
 /* ================= constants ================= */
 var FILES = "abcdefgh";
-var WHITE_GLYPH = {k:"♔",q:"♕",r:"♖",b:"♗",n:"♘",p:"♙"};
-var BLACK_GLYPH = {k:"♚",q:"♛",r:"♜",b:"♝",n:"♞",p:"♟"};
+/* both sides use the same (solid) glyphs — colour + rim distinguish them */
+var WHITE_GLYPH = {k:"♚",q:"♛",r:"♜",b:"♝",n:"♞",p:"♟"};
+var BLACK_GLYPH = WHITE_GLYPH;
 var DIE = ["⚀","⚁","⚂","⚃","⚄","⚅"];
 var VAL = {p:1,n:3,b:3,r:5,q:9,k:0};
 var NAME = {p:"Pawn",n:"Knight",b:"Bishop",r:"Rook",q:"Queen",k:"King"};
@@ -915,7 +916,10 @@ function choosePromo(cb){
   ["q","r","b","n"].forEach(function(pp){
     var b=document.createElement("button");
     b.className="die"; b.type="button"; b.style.cursor="pointer"; b.style.border="0"; b.style.background="none";
-    b.textContent=(state.turn==="w"?WHITE_GLYPH:BLACK_GLYPH)[pp];
+    b.textContent=WHITE_GLYPH[pp];
+    var side = state.turn==="w" ? "white" : "black";
+    b.style.color = "var(--piece-"+side+")";
+    b.style.webkitTextStroke = "2px var(--piece-"+side+"-stroke)";
     b.setAttribute("aria-label","Promote to "+NAME[pp]);
     b.addEventListener("click",function(){
       ov.classList.remove("show"); wrap.remove();
