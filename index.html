@@ -723,8 +723,12 @@ function longNotation(mv, result){
 }
 
 /* ================= position key (threefold) ================= */
+/* Join with a separator, NOT "". Empty squares are "", so joining with nothing
+   drops every gap and the key ends up encoding only the sequence of pieces, not
+   the squares they stand on — after 1.e4 the key was byte-identical to the
+   starting position, so ordinary opening moves triggered a bogus threefold. */
 function posKey(st){
-  return st.board.join("")+"|"+st.turn+"|"+st.castling.wK+st.castling.wQ+st.castling.bK+st.castling.bQ+"|"+st.ep;
+  return st.board.join(",")+"|"+st.turn+"|"+st.castling.wK+st.castling.wQ+st.castling.bK+st.castling.bQ+"|"+st.ep;
 }
 
 /* ================= insufficient material ================= */
@@ -766,7 +770,38 @@ function audio(){
    against a clock that is not running yet and is silently dropped. Unlock from
    the first real gesture, play a one-sample buffer (which is what iOS actually
    requires), and only mark audio usable once the context reports "running". */
+/* iOS mutes Web Audio whenever the physical ring/silent switch is set to
+   silent — HTML media elements are exempt, Web Audio is not. Declaring a
+   "playback" audio session lifts that (Safari 16.4+); on older iOS the same
+   effect comes from having a media element playing, so a silent looping clip
+   stands in. Both are no-ops elsewhere. */
+function buildSilentClip(){
+  var sr=8000, n=sr, dataLen=n*2, buf=new ArrayBuffer(44+dataLen), v=new DataView(buf);
+  function tag(o,s){ for(var i=0;i<s.length;i++) v.setUint8(o+i, s.charCodeAt(i)); }
+  tag(0,"RIFF"); v.setUint32(4,36+dataLen,true); tag(8,"WAVE"); tag(12,"fmt ");
+  v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true);
+  v.setUint32(24,sr,true); v.setUint32(28,sr*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true);
+  tag(36,"data"); v.setUint32(40,dataLen,true);          // samples stay zero = silence
+  var bytes=new Uint8Array(buf), bin="";
+  for(var i=0;i<bytes.length;i++) bin+=String.fromCharCode(bytes[i]);
+  return "data:audio/wav;base64,"+btoa(bin);
+}
+var keepAlive=null;
+function claimAudioSession(){
+  try{ if(navigator.audioSession) navigator.audioSession.type="playback"; }catch(e){}
+  if(keepAlive) return;
+  try{
+    keepAlive=new Audio(buildSilentClip());
+    keepAlive.loop=true;
+    keepAlive.setAttribute("playsinline","");
+    keepAlive.preload="auto";
+    var p=keepAlive.play();
+    if(p && p.catch) p.catch(function(){ keepAlive=null; });
+  }catch(e){ keepAlive=null; }
+}
+
 function unlockAudio(){
+  claimAudioSession();
   var c=audio(); if(!c) return;
   try{
     var b=c.createBuffer(1,1,22050);
@@ -780,6 +815,14 @@ function unlockAudio(){
 }
 ["pointerdown","touchstart","mousedown","keydown"].forEach(function(evt){
   document.addEventListener(evt, unlockAudio, {capture:true, passive:true});
+});
+/* Returning from the background leaves the context suspended, which would make
+   the game fall silent for the rest of the session. */
+document.addEventListener("visibilitychange", function(){
+  if(document.visibilityState==="visible" && actx && actx.state==="suspended"){
+    actx.resume().catch(function(){});
+    if(keepAlive && keepAlive.paused){ var p=keepAlive.play(); if(p&&p.catch) p.catch(function(){}); }
+  }
 });
 
 function tone(opts){
