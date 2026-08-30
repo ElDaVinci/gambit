@@ -78,6 +78,21 @@ discovery, push notifications, and in-app purchase, none of which matter yet.
 **Release discipline:** bump `CACHE` in `sw.js` on every ship, or clients keep the stale
 cache. Run `bash tools/build-artifact.sh` too, so the Artifact copy stays in sync.
 
+## Game review ✅ DONE
+
+After the game ends, **Review game** steps through it ply by ply. Each ply is stored as a
+board snapshot (plus side to move and captured pieces) rather than replayed, so the dice
+results you actually got are the ones you see — replaying would re-roll them and show a
+different game.
+
+Each step names the piece, the squares, and for a capture the **dice that decided it** —
+`Queen Qh5xf7 — captured the pawn ([5 6]→6–4)` shows the queen's two attack dice, which
+one was kept, and what the defender rolled. That is the part worth reviewing in Gambit:
+not just what was played, but what the dice did to it.
+
+Navigation: first/prev/next/last, arrow keys, Home/End, Escape to close, and clicking any
+move in the log jumps straight to it. The board is read-only while reviewing.
+
 ## Phase 6 — next
 
 - **Playtest.** Does the 50/50-everything feel good, or too swingy? Tune from real games.
