@@ -34,7 +34,8 @@
   --board-light:#e1d9c4; --board-dark:#55675a;
   --piece-white:#fdfbf3; --piece-white-stroke:#433d2e;
   --piece-black:#14150f; --piece-black-stroke:#efe9d4;
-  --sel:rgba(169,130,47,.32); --dot:rgba(92,127,82,.55); --last:rgba(169,130,47,.20);
+  --sel:rgba(169,130,47,.32); --dot:rgba(92,127,82,.55);
+  --lastFrom:rgba(169,130,47,.14); --lastTo:rgba(169,130,47,.40); --lastEdge:rgba(169,130,47,.85);
   --check:rgba(176,64,47,.30);
   --shadow:0 1px 2px rgba(30,32,24,.06),0 8px 30px rgba(30,32,24,.10);
   --radius:10px;
@@ -48,7 +49,8 @@
     --board-light:#cbc0a5; --board-dark:#39493f;
     --piece-white:#f8f4e8; --piece-white-stroke:#2c2921;
     --piece-black:#131410; --piece-black-stroke:#e0d9c2;
-    --sel:rgba(224,189,102,.30); --dot:rgba(122,169,112,.60); --last:rgba(224,189,102,.16);
+    --sel:rgba(224,189,102,.30); --dot:rgba(122,169,112,.60);
+    --lastFrom:rgba(224,189,102,.13); --lastTo:rgba(224,189,102,.36); --lastEdge:rgba(224,189,102,.90);
     --check:rgba(209,90,75,.34);
     --shadow:0 1px 2px rgba(0,0,0,.25),0 10px 34px rgba(0,0,0,.40);
   }
@@ -61,7 +63,8 @@
   --board-light:#cbc0a5; --board-dark:#39493f;
   --piece-white:#f8f4e8; --piece-white-stroke:#2c2921;
   --piece-black:#131410; --piece-black-stroke:#e0d9c2;
-  --sel:rgba(224,189,102,.30); --dot:rgba(122,169,112,.60); --last:rgba(224,189,102,.16);
+  --sel:rgba(224,189,102,.30); --dot:rgba(122,169,112,.60);
+    --lastFrom:rgba(224,189,102,.13); --lastTo:rgba(224,189,102,.36); --lastEdge:rgba(224,189,102,.90);
   --check:rgba(209,90,75,.34);
   --shadow:0 1px 2px rgba(0,0,0,.25),0 10px 34px rgba(0,0,0,.40);
 }
@@ -136,7 +139,26 @@ body{
 .sq.pickable .glyph{cursor:pointer}
 .sq.pickable:hover .glyph{transform:translateY(-2px)}
 .sq.sel::after{content:"";position:absolute;inset:0;background:var(--sel);z-index:1}
-.sq.last::after{content:"";position:absolute;inset:0;background:var(--last);z-index:0}
+/* Last move: the square the piece LEFT is outlined and hollow; the square it
+   ARRIVED on is filled and pulses. Reading order is unmistakable at a glance. */
+.sq.lastFrom::before{content:"";position:absolute;inset:0;z-index:0;
+  background:var(--lastFrom);box-shadow:inset 0 0 0 3px var(--lastEdge)}
+.sq.lastTo::before{content:"";position:absolute;inset:0;z-index:0;
+  background:var(--lastTo);box-shadow:inset 0 0 0 3px var(--lastEdge)}
+.sq.lastTo.pulse::before{animation:arrive 1.5s ease-out 1}
+@keyframes arrive{
+  0%{box-shadow:inset 0 0 0 3px var(--lastEdge),0 0 0 0 var(--lastEdge)}
+  55%{box-shadow:inset 0 0 0 3px var(--lastEdge),0 0 0 9px transparent}
+  100%{box-shadow:inset 0 0 0 3px var(--lastEdge),0 0 0 0 transparent}
+}
+/* drag & drop */
+.sq.dropTarget::after{content:"";position:absolute;inset:0;z-index:1;
+  background:var(--sel);box-shadow:inset 0 0 0 3px var(--brass)}
+.sq.dragSource .glyph{opacity:.28}
+.dragGhost{position:fixed;z-index:60;pointer-events:none;width:64px;height:64px;
+  transform:translate(-50%,-50%) scale(1.12);filter:drop-shadow(0 6px 10px rgba(0,0,0,.42))}
+body.dragging{cursor:grabbing;-webkit-user-select:none;user-select:none}
+body.dragging .sq{cursor:grabbing}
 .sq.check::after{content:"";position:absolute;inset:0;background:var(--check);z-index:1;
   box-shadow:inset 0 0 0 3px var(--repel)}
 .sq .move-dot{position:absolute;width:26%;height:26%;border-radius:50%;background:var(--dot);z-index:1}
@@ -223,10 +245,37 @@ details.rules .body li{margin:3px 0}
 .battle .versus .glyph{width:46px;height:46px}
 .battle .versus .vs{font-family:"Zilla Slab",serif;font-size:14px;color:var(--muted);letter-spacing:.1em}
 .battle .roles{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:14px;padding:0 6px}
-.dice{display:flex;align-items:center;justify-content:center;gap:22px;margin:6px 0 4px}
-.die{font-size:66px;line-height:1;color:var(--brass);filter:drop-shadow(0 3px 6px rgba(0,0,0,.18))}
-.die.tumble{animation:tumble .5s steps(1) both}
-@keyframes tumble{0%{transform:rotate(-12deg) scale(.9)}50%{transform:rotate(10deg) scale(1.08)}100%{transform:none}}
+/* ---- 3D dice ---- */
+.dice{display:flex;align-items:center;justify-content:center;gap:34px;margin:14px 0 6px;
+  perspective:520px}
+.dieBox{width:64px;height:64px;position:relative;transform-style:preserve-3d;
+  transition:transform 1.15s cubic-bezier(.22,.72,.24,1)}
+.dieBox.settle{animation:settle .34s ease-out .05s both}
+@keyframes settle{0%{filter:none}35%{filter:brightness(1.22)}100%{filter:none}}
+.dieShadow{position:absolute;left:50%;bottom:-16px;width:56px;height:10px;border-radius:50%;
+  transform:translateX(-50%);background:rgba(0,0,0,.30);filter:blur(5px)}
+.face{
+  position:absolute;inset:0;border-radius:11px;
+  background:linear-gradient(150deg,#fbf7ea,#e6dcc2);
+  border:1px solid rgba(90,80,55,.30);
+  box-shadow:inset 0 0 14px rgba(120,100,60,.22);
+  display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);
+  padding:9px;gap:2px;backface-visibility:visible;
+}
+.face i{width:11px;height:11px;border-radius:50%;align-self:center;justify-self:center;
+  background:radial-gradient(circle at 34% 30%,#5d5340,#241f16);
+  box-shadow:inset 0 1px 1px rgba(255,255,255,.30)}
+/* face placement on the cube — half-edge is 32px */
+.f1{transform:translateZ(32px)}
+.f6{transform:rotateY(180deg) translateZ(32px)}
+.f2{transform:rotateY(90deg)  translateZ(32px)}
+.f5{transform:rotateY(-90deg) translateZ(32px)}
+.f3{transform:rotateX(90deg)  translateZ(32px)}
+.f4{transform:rotateX(-90deg) translateZ(32px)}
+.dieLabel{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--muted);text-align:center;margin-top:22px}
+.dieWrap{display:flex;flex-direction:column;align-items:center}
+.dieWrap.winner .dieBox{filter:drop-shadow(0 0 10px color-mix(in srgb,var(--advance) 70%,transparent))}
 .battle .tallies{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-soft);min-height:1.4em;margin-top:2px}
 .battle .verdict{font-family:"Zilla Slab",serif;font-weight:700;font-size:22px;margin:12px 0 2px;min-height:1.2em;text-wrap:balance}
 .battle .verdict.win{color:var(--advance)}
@@ -315,6 +364,8 @@ details.rules .body li{margin:3px 0}
           </div>
           <label class="switch"><span>Rotate board each turn</span>
             <input type="checkbox" id="rotateToggle"><span class="track"></span></label>
+          <label class="switch"><span>Sound</span>
+            <input type="checkbox" id="soundToggle" checked><span class="track"></span></label>
         </div>
       </div>
 
@@ -357,7 +408,17 @@ details.rules .body li{margin:3px 0}
       <span id="defGlyph"></span>
     </div>
     <div class="roles"><span>Attacker</span><span>Defender</span></div>
-    <div class="dice"><span class="die" id="dieA">&#9856;</span><span class="die" id="dieD">&#9856;</span></div>
+    <p class="tallies" id="rollLog"></p>
+    <div class="dice">
+      <div class="dieWrap" id="wrapA">
+        <div class="dieBox" id="dieA"></div><div class="dieShadow"></div>
+        <div class="dieLabel">Attacker</div>
+      </div>
+      <div class="dieWrap" id="wrapD">
+        <div class="dieBox" id="dieD"></div><div class="dieShadow"></div>
+        <div class="dieLabel">Defender</div>
+      </div>
+    </div>
     <p class="tallies" id="tallies"></p>
     <p class="verdict" id="verdict"></p>
     <p class="verdict-sub" id="verdictSub"></p>
@@ -384,7 +445,6 @@ function pieceSVG(color, type, extra){
   return '<svg class="glyph'+(color==="b"?" b":"")+(extra?" "+extra:"")+
          '" viewBox="0 0 45 45" aria-hidden="true" focusable="false"><use href="#pc-'+type+'"/></svg>';
 }
-var DIE = ["⚀","⚁","⚂","⚃","⚄","⚅"];
 var VAL = {p:1,n:3,b:3,r:5,q:9,k:0};
 var NAME = {p:"Pawn",n:"Knight",b:"Bishop",r:"Rook",q:"Queen",k:"King"};
 
@@ -644,6 +704,94 @@ function insufficient(b){
   return true;
 }
 
+/* ================= sound =================
+   Synthesised with the Web Audio API rather than shipped as audio files, so the
+   game stays one self-contained document. Browsers block audio until the user
+   interacts, so the context is created lazily and resumed on first input. */
+var actx=null, soundOn=true;
+function audio(){
+  if(actx===null){
+    var AC = window.AudioContext || window.webkitAudioContext;
+    actx = AC ? new AC() : false;
+  }
+  if(actx && actx.state==="suspended") actx.resume();
+  return actx || null;
+}
+function tone(opts){
+  var c=audio(); if(!c||!soundOn) return;
+  var t0=c.currentTime + (opts.delay||0);
+  var o=c.createOscillator(), g=c.createGain();
+  o.type=opts.type||"sine";
+  o.frequency.setValueAtTime(opts.f0, t0);
+  if(opts.f1) o.frequency.exponentialRampToValueAtTime(Math.max(1,opts.f1), t0+opts.dur);
+  var peak=(opts.gain||0.15);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(peak, t0+0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0+opts.dur);
+  o.connect(g); g.connect(c.destination);
+  o.start(t0); o.stop(t0+opts.dur+0.02);
+}
+function noise(dur, gain, delay, hp){
+  var c=audio(); if(!c||!soundOn) return;
+  var t0=c.currentTime+(delay||0), n=Math.floor(c.sampleRate*dur);
+  var buf=c.createBuffer(1,n,c.sampleRate), d=buf.getChannelData(0);
+  for(var i=0;i<n;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/n,2);
+  var src=c.createBufferSource(); src.buffer=buf;
+  var f=c.createBiquadFilter(); f.type="highpass"; f.frequency.value=hp||900;
+  var g=c.createGain(); g.gain.value=gain||0.12;
+  src.connect(f); f.connect(g); g.connect(c.destination);
+  src.start(t0);
+}
+/* a piece set down on a board */
+function sndMove(){ noise(0.055,0.10,0,1600); tone({f0:210,f1:120,dur:0.09,type:"triangle",gain:0.11}); }
+/* the capture lands */
+function sndCapture(){
+  noise(0.09,0.16,0,900);
+  tone({f0:330,f1:520,dur:0.13,type:"triangle",gain:0.13});
+  tone({f0:520,f1:660,dur:0.16,type:"sine",gain:0.09,delay:0.09});
+}
+/* the attack is repelled — the attacker dies */
+function sndRepel(){
+  noise(0.12,0.14,0,500);
+  tone({f0:300,f1:90,dur:0.30,type:"sawtooth",gain:0.11});
+}
+/* dice hitting the table */
+function sndDie(delay){ noise(0.045,0.09,delay||0,2200); tone({f0:420+Math.random()*160,f1:200,dur:0.06,type:"square",gain:0.045,delay:delay||0}); }
+function sndCheck(){ tone({f0:740,dur:0.11,type:"square",gain:0.10}); tone({f0:880,dur:0.14,type:"square",gain:0.10,delay:0.13}); }
+function sndEnd(win){
+  var seq = win ? [523,659,784,1047] : [523,440,349,262];
+  seq.forEach(function(f,i){ tone({f0:f,dur:0.26,type:"triangle",gain:0.11,delay:i*0.13}); });
+}
+
+/* ================= 3D dice ================= */
+/* Which pips are lit, on a 3x3 grid indexed 1..9 */
+var PIPS={1:[5],2:[1,9],3:[1,5,9],4:[1,3,7,9],5:[1,3,5,7,9],6:[1,3,4,6,7,9]};
+/* Rotation that brings each face to the front, given the .fN placements */
+var FACE_ROT={1:[0,0],2:[0,-90],3:[-90,0],4:[90,0],5:[0,90],6:[0,180]};
+
+function buildDie(box){
+  box.innerHTML="";
+  for(var n=1;n<=6;n++){
+    var f=document.createElement("div");
+    f.className="face f"+n;
+    var lit=PIPS[n];
+    for(var cell=1;cell<=9;cell++){
+      var s=document.createElement("span");
+      if(lit.indexOf(cell)>=0){ var pip=document.createElement("i"); s.appendChild(pip); }
+      s.style.display="flex"; s.style.alignItems="center"; s.style.justifyContent="center";
+      f.appendChild(s);
+    }
+    box.appendChild(f);
+  }
+}
+/* Land the cube on `value`, spinning a few extra turns on the way. */
+function rollDie(box, value, spins){
+  var r=FACE_ROT[value];
+  var rx = r[0] + 360*(spins||2);
+  var ry = r[1] + 360*(spins||2);
+  box.style.transform = "rotateX("+rx+"deg) rotateY("+ry+"deg)";
+}
+
 /* ================= dice battle (async) ================= */
 var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -661,46 +809,81 @@ function battle(atkType, atkColor, defType, defColor, atSq){
     ov.classList.add("show");
 
     var dieA=document.getElementById("dieA"), dieD=document.getElementById("dieD");
-    var rounds=[];
-    (function nextRoll(){
+    var wrapA=document.getElementById("wrapA"), wrapD=document.getElementById("wrapD");
+    var rollLog=document.getElementById("rollLog");
+    buildDie(dieA); buildDie(dieD);
+    dieA.style.transform="rotateX(-24deg) rotateY(18deg)";
+    dieD.style.transform="rotateX(-24deg) rotateY(18deg)";
+    rollLog.textContent="";
+    wrapA.classList.remove("winner"); wrapD.classList.remove("winner");
+
+    var rounds=[], turnCount=0;
+    throwDice();
+
+    function throwDice(){
       var a=d6(), bd=d6();
-      rounds.push([a,bd]);
-      spin(dieA,dieD,a,bd,function(){
-        if(a===bd){
-          document.getElementById("tallies").textContent="Tie on "+a+" — re-roll";
-          setTimeout(nextRoll, reduced?150:520);
-        } else {
-          var win=a>bd;
-          var v=document.getElementById("verdict");
-          v.textContent = win ? "Capture!" : "Attack repelled";
-          v.className = "verdict "+(win?"win":"lose");
-          document.getElementById("tallies").textContent =
-            "Attacker "+a+"  ·  Defender "+bd + (rounds.length>1 ? "   ("+rounds.length+" rolls)" : "");
-          document.getElementById("verdictSub").textContent = win
-            ? NAME[atkType]+" takes the "+NAME[defType].toLowerCase()
-            : NAME[atkType]+" is lost; the "+NAME[defType].toLowerCase()+" holds";
-          var go=document.getElementById("battleGo");
-          go.style.display="block";
-          var done=false;
-          function finish(){ if(done) return; done=true; ov.classList.remove("show");
-            ov.removeEventListener("click",finish); go.removeEventListener("click",finish); resolve(win); }
-          go.addEventListener("click",finish);
-          ov.addEventListener("click",finish);
-          if(!reduced) setTimeout(finish, 2000);
-        }
-      });
-    })();
+      rounds.push(a+"–"+bd);
+      turnCount++;
+      dieA.classList.remove("settle"); dieD.classList.remove("settle");
+      void dieA.offsetWidth;
+
+      if(reduced){
+        dieA.style.transition="none"; dieD.style.transition="none";
+        rollDie(dieA,a,0); rollDie(dieD,bd,0);
+        setTimeout(function(){ land(a,bd); }, 60);
+        return;
+      }
+      dieA.style.transition=""; dieD.style.transition="";
+      // extra whole turns each round, so a re-roll still visibly tumbles
+      rollDie(dieA, a, 2+turnCount);
+      rollDie(dieD, bd, 3+turnCount);
+      sndDie(0.02); sndDie(0.10);       // leaving the hand
+      sndDie(0.95); sndDie(1.05);       // clattering to rest
+      setTimeout(function(){
+        dieA.classList.add("settle"); dieD.classList.add("settle");
+        land(a,bd);
+      }, 1200);
+    }
+
+    function land(a,bd){
+      if(a===bd){
+        rollLog.textContent = "Tie on "+a+" — rolling again";
+        tone({f0:300,dur:0.10,type:"square",gain:0.07});
+        setTimeout(throwDice, reduced?200:850);
+        return;
+      }
+      var win=a>bd;
+      (win?wrapA:wrapD).classList.add("winner");
+      var v=document.getElementById("verdict");
+      v.textContent = win ? "Capture!" : "Attack repelled";
+      v.className = "verdict "+(win?"win":"lose");
+      document.getElementById("tallies").textContent = "Attacker "+a+"  ·  Defender "+bd;
+      rollLog.textContent = rounds.length>1 ? ("Rolls: "+rounds.join("  ·  ")) : "";
+      document.getElementById("verdictSub").textContent = win
+        ? NAME[atkType]+" takes the "+NAME[defType].toLowerCase()
+        : NAME[atkType]+" is lost; the "+NAME[defType].toLowerCase()+" holds";
+      win ? sndCapture() : sndRepel();
+
+      var go=document.getElementById("battleGo");
+      go.style.display="block";
+      go.focus();
+      var done=false;
+      function finish(){
+        if(done) return; done=true;
+        ov.classList.remove("show");
+        go.removeEventListener("click", finish);
+        document.removeEventListener("keydown", onKey);
+        resolve(win);
+      }
+      function onKey(e){
+        if(e.key==="Enter"||e.key===" "||e.key==="Escape"){ e.preventDefault(); finish(); }
+      }
+      /* The overlay stays until the player dismisses it — no timeout, and no
+         click-outside, so a stray click can never skip the result. */
+      go.addEventListener("click", finish);
+      document.addEventListener("keydown", onKey);
+    }
   });
-}
-function spin(dieA,dieD,a,bd,cb){
-  if(reduced){ dieA.textContent=DIE[a-1]; dieD.textContent=DIE[bd-1]; cb(); return; }
-  dieA.classList.remove("tumble"); dieD.classList.remove("tumble");
-  void dieA.offsetWidth; dieA.classList.add("tumble"); dieD.classList.add("tumble");
-  var n=0, iv=setInterval(function(){
-    dieA.textContent=DIE[Math.floor(Math.random()*6)];
-    dieD.textContent=DIE[Math.floor(Math.random()*6)];
-    if(++n>=6){ clearInterval(iv); dieA.textContent=DIE[a-1]; dieD.textContent=DIE[bd-1]; cb(); }
-  },70);
 }
 
 /* ================= committing a move ================= */
@@ -734,7 +917,8 @@ function finalize(mv, success, extra){
   state.ep = res.ep;
   state.halfmove = res.halfmove;
   if(res.captured){ state.graves[res.captured.color].push(res.captured.type); }
-  lastMove = {from:mv.from, to:mv.to, success:success, capture:!!mv.capture};
+  lastMove = {from:mv.from, to:mv.to, success:success, capture:!!mv.capture, fresh:true};
+  var pieceLanded = !(mv.capture && !success && atkType!=="k");   // a repelled attacker vanishes
 
   if(mv.capture){
     var dn = (extra && extra.defType) ? NAME[extra.defType] : "piece";
@@ -802,7 +986,32 @@ function finalize(mv, success, extra){
   pushHistory(moverColor, mv, noteResult, suffix);
   busy=false;
   render();
+  if(pieceLanded) slidePiece(mv.from, mv.to);
+  if(!mv.capture) sndMove();
+  if(inCheck(state.board, state.turn)) sndCheck();
+  lastMove.fresh=false;
   maybeBot();
+}
+
+/* Slide the moved piece from its origin to its destination (FLIP): the board is
+   already re-rendered, so offset the arrived piece back to where it came from
+   and let it transition home. Makes the bot's move readable at a glance. */
+function slidePiece(fromIdx, toIdx){
+  if(reduced) return;
+  var flip = rotate && state.turn==="b";
+  var d = function(i){ return flip ? 63-i : i; };
+  var fromCell=boardEl.children[d(fromIdx)], toCell=boardEl.children[d(toIdx)];
+  if(!fromCell||!toCell) return;
+  var g=toCell.querySelector(".glyph");
+  if(!g) return;
+  var dx=fromCell.offsetLeft-toCell.offsetLeft, dy=fromCell.offsetTop-toCell.offsetTop;
+  if(!dx && !dy) return;
+  g.style.transition="none";
+  g.style.transform="translate("+dx+"px,"+dy+"px)";
+  requestAnimationFrame(function(){
+    g.style.transition="transform .30s cubic-bezier(.22,.68,.28,1)";
+    g.style.transform="";
+  });
 }
 
 function NAME_COLOR(c){return c==="w"?"White":"Black";}
@@ -827,6 +1036,10 @@ function buildBoard(){
     btn.type="button";
     btn.setAttribute("role","gridcell");
     btn.addEventListener("click", onSquareClick);
+    btn.addEventListener("pointerdown", onPointerDown);
+    btn.addEventListener("pointermove", onPointerMove);
+    btn.addEventListener("pointerup", onPointerUp);
+    btn.addEventListener("pointercancel", endDrag);
     boardEl.appendChild(btn);
   }
 }
@@ -862,8 +1075,13 @@ function render(){
     var inner="";
     if(pc){ inner=pieceSVG(pc[0], pc[1]); }
     if(sel===i) cell.classList.add("sel");
-    if(lastMove && (lastMove.from===i||lastMove.to===i)) cell.classList.add("last");
+    if(lastMove){
+      if(lastMove.from===i) cell.classList.add("lastFrom");
+      if(lastMove.to===i){ cell.classList.add("lastTo"); if(lastMove.fresh) cell.classList.add("pulse"); }
+    }
     if(i===checkSq) cell.classList.add("check");
+    if(dragState && dragState.from===i) cell.classList.add("dragSource");
+    if(dragState && dragState.targets[i]) cell.classList.add("dropTarget");
     if(targetTo[i]==="move") inner+='<span class="move-dot"></span>';
     if(targetTo[i]==="cap") inner+='<span class="capture-ring"></span>';
     cell.innerHTML=inner;
@@ -1095,19 +1313,129 @@ function maybeBot(){
   if(state.turn !== botSide) return;
   thinking=true; busy=true;
   render();
+  /* Deliberately unhurried. The search itself takes 1–100ms, which is far too
+     fast to follow — the pause plus the from/to highlights are what let you see
+     what the computer actually played. */
+  var THINK_MS = 900;
+  var t0 = Date.now();
   setTimeout(function(){
     var mv=null;
     try { mv = chooseBotMove(state, botLevel); }
     catch(err){ mv = null; }
-    thinking=false; busy=false;
-    if(mv) commit(mv); else render();
-  }, 160);
+    var wait = Math.max(0, THINK_MS - (Date.now()-t0));
+    setTimeout(function(){
+      thinking=false; busy=false;
+      if(mv) commit(mv); else render();
+    }, wait);
+  }, 60);
+}
+
+/* ================= drag and drop =================
+   Pointer events rather than HTML5 drag-and-drop: they work identically for
+   mouse and touch, and let the piece follow the finger. A press that never
+   moves far falls through to the existing tap-to-select behaviour. */
+var dragState=null;
+var DRAG_THRESHOLD=6;   // px before a press becomes a drag
+/* A pointerdown is followed by a click on the same square. Without this, the
+   pointerdown selects the piece and the click immediately toggles it back off,
+   so a plain tap would appear to do nothing. Squares stay <button>s so the
+   keyboard still works, which is why the click handler has to remain. */
+var suppressClick=-1;
+
+function squareIndexFromPoint(x,y){
+  var cells=boardEl.children;
+  for(var d=0;d<64;d++){
+    var r=cells[d].getBoundingClientRect();
+    if(x>=r.left && x<=r.right && y>=r.top && y<=r.bottom) return parseInt(cells[d].dataset.i,10);
+  }
+  return -1;
+}
+
+function onPointerDown(e){
+  suppressClick=-1;
+  if(busy||gameOver||e.button===1||e.button===2) return;
+  var i=parseInt(this.dataset.i,10);
+  var pc=state.board[i];
+  if(!pc || pc[0]!==state.turn) return;
+  var moves=legalCache.filter(function(m){return m.from===i;});
+  if(!moves.length) return;
+
+  audio();   // first user gesture — unlock sound
+  var targets={};
+  moves.forEach(function(m){ targets[m.to]=true; });
+  dragState={from:i, targets:targets, startX:e.clientX, startY:e.clientY,
+             moved:false, ghost:null, pointerId:e.pointerId};
+  var wasSelected=(selected===i);
+  selected=i;
+  /* Only swallow the click when this press changed the selection — pressing an
+     already-selected piece should still let the click deselect it. */
+  if(!wasSelected) suppressClick=i;
+  render();
+  try{ this.setPointerCapture(e.pointerId); }catch(err){}
+}
+
+function onPointerMove(e){
+  if(!dragState || e.pointerId!==dragState.pointerId) return;
+  var dx=e.clientX-dragState.startX, dy=e.clientY-dragState.startY;
+  if(!dragState.moved && Math.hypot(dx,dy) < DRAG_THRESHOLD) return;
+
+  if(!dragState.moved){
+    dragState.moved=true;
+    document.body.classList.add("dragging");
+    var pc=state.board[dragState.from];
+    var ghost=document.createElement("div");
+    ghost.className="dragGhost";
+    ghost.innerHTML=pieceSVG(pc[0], pc[1]);
+    var svg=ghost.querySelector("svg");
+    svg.style.width="100%"; svg.style.height="100%";
+    document.body.appendChild(ghost);
+    dragState.ghost=ghost;
+    render();
+  }
+  e.preventDefault();
+  dragState.ghost.style.left=e.clientX+"px";
+  dragState.ghost.style.top =e.clientY+"px";
+}
+
+function onPointerUp(e){
+  if(!dragState || e.pointerId!==dragState.pointerId) return;
+  var st=dragState, over=-1;
+  if(st.moved) over=squareIndexFromPoint(e.clientX, e.clientY);
+  endDrag();
+  if(!st.moved) return;                 // a tap: leave the piece selected
+  suppressClick=st.from;                // the trailing click lands on the source
+  if(over<0 || !st.targets[over]){ selected=null; render(); return; }
+  playMove(st.from, over);
+}
+
+function endDrag(){
+  if(!dragState) return;
+  if(dragState.ghost) dragState.ghost.remove();
+  document.body.classList.remove("dragging");
+  dragState=null;
+  render();
+}
+
+/* Shared by click and drag: run the move from -> to, asking about promotion. */
+function playMove(from, to){
+  var cands=legalCache.filter(function(m){return m.from===from && m.to===to;});
+  if(!cands.length){ selected=null; render(); return; }
+  if(cands.length>1 && cands[0].promo){
+    choosePromo(function(pp){
+      commit(cands.filter(function(m){return m.promo===pp;})[0] || cands[0]);
+    });
+    return;
+  }
+  commit(cands[0]);
 }
 
 /* ================= interaction ================= */
 function onSquareClick(e){
   if(busy||gameOver) return;
+  audio();                       // first user gesture — unlock sound
   var i=parseInt(this.dataset.i,10);
+  if(suppressClick===i){ suppressClick=-1; return; }
+  suppressClick=-1;
   var pc=state.board[i];
   if(selected===null){
     if(pc && pc[0]===state.turn && legalCache.some(function(m){return m.from===i;})){
@@ -1119,16 +1447,7 @@ function onSquareClick(e){
   if(pc && pc[0]===state.turn && legalCache.some(function(m){return m.from===i;})){
     selected=i; render(); return;
   }
-  var cands = legalCache.filter(function(m){return m.from===selected && m.to===i;});
-  if(cands.length===0){ selected=null; render(); return; }
-  if(cands.length>1 && cands[0].promo){
-    choosePromo(function(pp){
-      var mv=cands.filter(function(m){return m.promo===pp;})[0] || cands[0];
-      commit(mv);
-    });
-    return;
-  }
-  commit(cands[0]);
+  playMove(selected, i);
 }
 
 function choosePromo(cb){
@@ -1171,7 +1490,9 @@ function choosePromo(cb){
 function endGame(result, why){
   gameOver=true;
   selected=null;
+  endDrag();
   render();
+  sndEnd(result==="Checkmate");
   document.getElementById("goResult").textContent=result;
   document.getElementById("goWhy").textContent=why;
   document.getElementById("gameover").classList.add("show");
@@ -1225,6 +1546,15 @@ botSideSel.addEventListener("change", function(){
   render(); maybeBot();
 });
 
+var sndToggle=document.getElementById("soundToggle");
+soundOn = loadPref("gambit.sound","1")==="1";
+sndToggle.checked=soundOn;
+sndToggle.addEventListener("change", function(){
+  soundOn=this.checked;
+  savePref("gambit.sound", soundOn?"1":"0");
+  if(soundOn){ audio(); sndMove(); }     // confirm it's audible
+});
+
 var rotToggle=document.getElementById("rotateToggle");
 try{ rotate = localStorage.getItem("gambit.rotate")==="1"; }catch(e){ rotate=false; }
 rotToggle.checked=rotate;
@@ -1266,7 +1596,8 @@ if("serviceWorker" in navigator && location.protocol.indexOf("http")===0){
 
 window.__G={freshState:freshState,legalMoves:legalMoves,applyMove:applyMove,opp:opp,
             inCheck:inCheck,chooseBotMove:chooseBotMove,evaluate:evaluate,LEVELS:LEVELS,
-            getNodes:function(){return nodes;}};
+            getNodes:function(){return nodes;},
+            buildDie:buildDie,rollDie:rollDie,FACE_ROT:FACE_ROT,PIPS:PIPS};
 
 })();
 </script>
