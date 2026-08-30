@@ -16,9 +16,10 @@ file that runs straight off disk, no server needed.
 
 ## The v1 ruleset (short version)
 
-Standard chess for everything except captures. A capture is a **battle**: 1d6 vs 1d6,
-re-roll ties, 50/50. Win → normal capture. Lose → **your attacking piece is removed**,
-defender stays. The King never rolls (classic check/checkmate; King captures auto-succeed).
+Standard chess for everything except captures. A capture is a **battle**: each side rolls
+and keeps its highest die, re-roll ties. Win → normal capture. Lose → **your attacking
+piece is removed**, defender stays. Everything rolls one die (50/50), **except the Queen,
+who rolls two when attacking and keeps the higher — about 69%. She still defends with one.** The King never rolls (classic check/checkmate; King captures auto-succeed).
 While your King is in check you keep moving — risking more pieces if you choose — until
 it's safe or it's checkmate. En passant is a battle; castling isn't; a capturing promotion
 battles first and promotes only on a win.
