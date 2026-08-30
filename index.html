@@ -108,7 +108,10 @@ body{
   grid-row:1;grid-column:2;
   display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);
   aspect-ratio:1;border:1px solid var(--line);border-radius:6px;overflow:hidden;box-shadow:var(--shadow);
-  touch-action:manipulation;
+  /* none, not manipulation: a touch starting on the board must drag a piece,
+     never pan or rubber-band the page underneath it */
+  touch-action:none;
+  overscroll-behavior:contain;
 }
 .sq{
   position:relative;border:0;padding:0;margin:0;cursor:pointer;
@@ -116,6 +119,9 @@ body{
   font-size:clamp(22px,7.4vw,44px);line-height:1;
   background:var(--board-light);
   -webkit-tap-highlight-color:transparent;
+  touch-action:none;
+  -webkit-user-select:none;user-select:none;
+  -webkit-touch-callout:none;   /* no long-press callout mid-drag on iOS */
 }
 .sq.dark{background:var(--board-dark)}
 .sq:disabled{cursor:default}
@@ -157,7 +163,8 @@ body{
 .sq.dragSource .glyph{opacity:.28}
 .dragGhost{position:fixed;z-index:60;pointer-events:none;width:64px;height:64px;
   transform:translate(-50%,-50%) scale(1.12);filter:drop-shadow(0 6px 10px rgba(0,0,0,.42))}
-body.dragging{cursor:grabbing;-webkit-user-select:none;user-select:none}
+body.dragging{cursor:grabbing;-webkit-user-select:none;user-select:none;
+  overflow:hidden;touch-action:none;overscroll-behavior:none}
 body.dragging .sq{cursor:grabbing}
 .sq.check::after{content:"";position:absolute;inset:0;background:var(--check);z-index:1;
   box-shadow:inset 0 0 0 3px var(--repel)}
@@ -233,12 +240,31 @@ details.rules .body ul{margin:6px 0;padding-left:18px}
 details.rules .body li{margin:3px 0}
 
 /* ---- battle overlay ---- */
-.overlay{position:fixed;inset:0;z-index:50;display:none;place-items:center;padding:20px;
-  background:color-mix(in srgb,var(--bg) 62%,transparent);backdrop-filter:blur(3px)}
+.overlay{position:fixed;inset:0;z-index:50;display:none;place-items:center;padding:16px;
+  background:color-mix(in srgb,var(--bg) 62%,transparent);backdrop-filter:blur(3px);
+  overflow-y:auto;overscroll-behavior:contain}
 .overlay.show{display:grid}
 .battle{
   width:min(360px,92vw);background:var(--surface);border:1px solid var(--line);border-radius:16px;
-  box-shadow:var(--shadow);padding:22px;text-align:center;
+  box-shadow:var(--shadow);padding:20px;text-align:center;
+  max-height:calc(100dvh - 32px);
+}
+/* Short viewports (a phone in portrait with browser chrome): tighten everything
+   so the dice and the Continue button are on screen at the same time. */
+@media (max-height:720px), (max-width:420px){
+  .battle{padding:14px}
+  .battle .versus{margin:6px 0 2px}
+  .battle .versus .glyph{width:34px;height:34px}
+  .battle .roles{margin-bottom:6px}
+  .dice{gap:26px;margin:8px 0 2px}
+  .dieBox{--half:26px;width:52px;height:52px}
+  .face{padding:7px}
+  .face i{width:9px;height:9px}
+  .dieShadow{width:44px;top:58px}
+  .dieWrap.winner .dieShadow{width:52px}
+  .dieLabel{margin-top:16px}
+  .battle .verdict{font-size:19px;margin:8px 0 2px}
+  .battle .go{margin-top:10px}
 }
 .battle .kicker{font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--brass);margin:0}
 .battle .versus{display:flex;align-items:center;justify-content:center;gap:16px;margin:12px 0 4px;line-height:1}
@@ -246,14 +272,19 @@ details.rules .body li{margin:3px 0}
 .battle .versus .vs{font-family:"Zilla Slab",serif;font-size:14px;color:var(--muted);letter-spacing:.1em}
 .battle .roles{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:14px;padding:0 6px}
 /* ---- 3D dice ---- */
-.dice{display:flex;align-items:center;justify-content:center;gap:34px;margin:14px 0 6px;
-  perspective:520px}
-.dieBox{width:64px;height:64px;position:relative;transform-style:preserve-3d;
+.dice{display:flex;align-items:center;justify-content:center;gap:34px;margin:14px 0 6px}
+.dieBox{--half:32px;width:64px;height:64px;position:relative;transform-style:preserve-3d;
   transition:transform 1.15s cubic-bezier(.22,.72,.24,1)}
-.dieBox.settle{animation:settle .34s ease-out .05s both}
-@keyframes settle{0%{filter:none}35%{filter:brightness(1.22)}100%{filter:none}}
-.dieShadow{position:absolute;left:50%;bottom:-16px;width:56px;height:10px;border-radius:50%;
-  transform:translateX(-50%);background:rgba(0,0,0,.30);filter:blur(5px)}
+.dieShadow{position:absolute;left:50%;top:70px;width:56px;height:10px;border-radius:50%;
+  transform:translateX(-50%);background:rgba(0,0,0,.28);opacity:.85;
+  transition:background .25s, width .25s}
+/* The "landed" cue animates the shadow, never the cube: any filter on a
+   preserve-3d element flattens it and collapses the die to an edge. */
+.dieWrap.settle .dieShadow{animation:thud .32s ease-out both}
+@keyframes thud{
+  0%{transform:translateX(-50%) scaleX(1.45);opacity:.45}
+  100%{transform:translateX(-50%) scaleX(1);opacity:.85}
+}
 .face{
   position:absolute;inset:0;border-radius:11px;
   background:linear-gradient(150deg,#fbf7ea,#e6dcc2);
@@ -265,17 +296,25 @@ details.rules .body li{margin:3px 0}
 .face i{width:11px;height:11px;border-radius:50%;align-self:center;justify-self:center;
   background:radial-gradient(circle at 34% 30%,#5d5340,#241f16);
   box-shadow:inset 0 1px 1px rgba(255,255,255,.30)}
-/* face placement on the cube — half-edge is 32px */
-.f1{transform:translateZ(32px)}
-.f6{transform:rotateY(180deg) translateZ(32px)}
-.f2{transform:rotateY(90deg)  translateZ(32px)}
-.f5{transform:rotateY(-90deg) translateZ(32px)}
-.f3{transform:rotateX(90deg)  translateZ(32px)}
-.f4{transform:rotateX(-90deg) translateZ(32px)}
+/* face placement — offset by the cube's half-edge, so one variable resizes it */
+.f1{transform:translateZ(var(--half))}
+.f6{transform:rotateY(180deg) translateZ(var(--half))}
+.f2{transform:rotateY(90deg)  translateZ(var(--half))}
+.f5{transform:rotateY(-90deg) translateZ(var(--half))}
+.f3{transform:rotateX(90deg)  translateZ(var(--half))}
+.f4{transform:rotateX(-90deg) translateZ(var(--half))}
 .dieLabel{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.1em;
   text-transform:uppercase;color:var(--muted);text-align:center;margin-top:22px}
-.dieWrap{display:flex;flex-direction:column;align-items:center}
-.dieWrap.winner .dieBox{filter:drop-shadow(0 0 10px color-mix(in srgb,var(--advance) 70%,transparent))}
+/* The perspective must sit on the cube's DIRECT parent. It used to be on .dice,
+   but .dieWrap sits in between and flattened the 3D context — which collapsed
+   any die rotated 90deg (values 2 and 5) to zero width and made it vanish. */
+.dieWrap{display:flex;flex-direction:column;align-items:center;position:relative;
+  perspective:520px;transform-style:preserve-3d}
+/* Winner marked on the shadow and label — deliberately NOT with a filter on the
+   die, which would flatten its 3D transform and make the cube disappear. */
+.dieWrap.winner .dieShadow{background:color-mix(in srgb,var(--advance) 75%,transparent);
+  width:66px;height:11px}
+.dieWrap.winner .dieLabel{color:var(--advance);font-weight:600}
 .battle .tallies{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-soft);min-height:1.4em;margin-top:2px}
 .battle .verdict{font-family:"Zilla Slab",serif;font-weight:700;font-size:22px;margin:12px 0 2px;min-height:1.2em;text-wrap:balance}
 .battle .verdict.win{color:var(--advance)}
@@ -364,8 +403,6 @@ details.rules .body li{margin:3px 0}
           </div>
           <label class="switch"><span>Rotate board each turn</span>
             <input type="checkbox" id="rotateToggle"><span class="track"></span></label>
-          <label class="switch"><span>Sound</span>
-            <input type="checkbox" id="soundToggle" checked><span class="track"></span></label>
         </div>
       </div>
 
@@ -708,17 +745,45 @@ function insufficient(b){
    Synthesised with the Web Audio API rather than shipped as audio files, so the
    game stays one self-contained document. Browsers block audio until the user
    interacts, so the context is created lazily and resumed on first input. */
-var actx=null, soundOn=true;
+var actx=null, master=null, audioReady=false;
+
 function audio(){
   if(actx===null){
     var AC = window.AudioContext || window.webkitAudioContext;
-    actx = AC ? new AC() : false;
+    if(!AC){ actx=false; return null; }
+    actx = new AC();
+    master = actx.createGain();
+    master.gain.value = 0.85;
+    master.connect(actx.destination);
   }
-  if(actx && actx.state==="suspended") actx.resume();
-  return actx || null;
+  if(!actx) return null;
+  if(actx.state==="suspended") actx.resume();
+  return actx;
 }
+
+/* Browsers start the audio context suspended and only let a user gesture wake
+   it. resume() is asynchronous, so anything scheduled before it lands is timed
+   against a clock that is not running yet and is silently dropped. Unlock from
+   the first real gesture, play a one-sample buffer (which is what iOS actually
+   requires), and only mark audio usable once the context reports "running". */
+function unlockAudio(){
+  var c=audio(); if(!c) return;
+  try{
+    var b=c.createBuffer(1,1,22050);
+    var s=c.createBufferSource();
+    s.buffer=b; s.connect(master); s.start(0);
+  }catch(e){}
+  var settle=function(){ if(c.state==="running") audioReady=true; };
+  if(c.state==="running") audioReady=true;
+  else if(c.resume) c.resume().then(settle, function(){});
+  setTimeout(settle, 120);
+}
+["pointerdown","touchstart","mousedown","keydown"].forEach(function(evt){
+  document.addEventListener(evt, unlockAudio, {capture:true, passive:true});
+});
+
 function tone(opts){
-  var c=audio(); if(!c||!soundOn) return;
+  var c=audio(); if(!c||!audioReady) return;
   var t0=c.currentTime + (opts.delay||0);
   var o=c.createOscillator(), g=c.createGain();
   o.type=opts.type||"sine";
@@ -728,39 +793,42 @@ function tone(opts){
   g.gain.setValueAtTime(0.0001, t0);
   g.gain.exponentialRampToValueAtTime(peak, t0+0.008);
   g.gain.exponentialRampToValueAtTime(0.0001, t0+opts.dur);
-  o.connect(g); g.connect(c.destination);
+  o.connect(g); g.connect(master);
   o.start(t0); o.stop(t0+opts.dur+0.02);
 }
 function noise(dur, gain, delay, hp){
-  var c=audio(); if(!c||!soundOn) return;
+  var c=audio(); if(!c||!audioReady) return;
   var t0=c.currentTime+(delay||0), n=Math.floor(c.sampleRate*dur);
   var buf=c.createBuffer(1,n,c.sampleRate), d=buf.getChannelData(0);
   for(var i=0;i<n;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/n,2);
   var src=c.createBufferSource(); src.buffer=buf;
   var f=c.createBiquadFilter(); f.type="highpass"; f.frequency.value=hp||900;
   var g=c.createGain(); g.gain.value=gain||0.12;
-  src.connect(f); f.connect(g); g.connect(c.destination);
+  src.connect(f); f.connect(g); g.connect(master);
   src.start(t0);
 }
 /* a piece set down on a board */
-function sndMove(){ noise(0.055,0.10,0,1600); tone({f0:210,f1:120,dur:0.09,type:"triangle",gain:0.11}); }
+function sndMove(){ noise(0.055,0.30,0,1600); tone({f0:210,f1:120,dur:0.10,type:"triangle",gain:0.34}); }
 /* the capture lands */
 function sndCapture(){
-  noise(0.09,0.16,0,900);
-  tone({f0:330,f1:520,dur:0.13,type:"triangle",gain:0.13});
-  tone({f0:520,f1:660,dur:0.16,type:"sine",gain:0.09,delay:0.09});
+  noise(0.09,0.42,0,900);
+  tone({f0:330,f1:520,dur:0.14,type:"triangle",gain:0.38});
+  tone({f0:520,f1:660,dur:0.18,type:"sine",gain:0.28,delay:0.09});
 }
 /* the attack is repelled — the attacker dies */
 function sndRepel(){
-  noise(0.12,0.14,0,500);
-  tone({f0:300,f1:90,dur:0.30,type:"sawtooth",gain:0.11});
+  noise(0.12,0.38,0,500);
+  tone({f0:300,f1:90,dur:0.32,type:"sawtooth",gain:0.32});
 }
 /* dice hitting the table */
-function sndDie(delay){ noise(0.045,0.09,delay||0,2200); tone({f0:420+Math.random()*160,f1:200,dur:0.06,type:"square",gain:0.045,delay:delay||0}); }
-function sndCheck(){ tone({f0:740,dur:0.11,type:"square",gain:0.10}); tone({f0:880,dur:0.14,type:"square",gain:0.10,delay:0.13}); }
+function sndDie(delay){
+  noise(0.045,0.26,delay||0,2200);
+  tone({f0:420+Math.random()*160,f1:200,dur:0.06,type:"square",gain:0.16,delay:delay||0});
+}
+function sndCheck(){ tone({f0:740,dur:0.12,type:"square",gain:0.30}); tone({f0:880,dur:0.15,type:"square",gain:0.30,delay:0.13}); }
 function sndEnd(win){
   var seq = win ? [523,659,784,1047] : [523,440,349,262];
-  seq.forEach(function(f,i){ tone({f0:f,dur:0.26,type:"triangle",gain:0.11,delay:i*0.13}); });
+  seq.forEach(function(f,i){ tone({f0:f,dur:0.28,type:"triangle",gain:0.32,delay:i*0.13}); });
 }
 
 /* ================= 3D dice ================= */
@@ -824,7 +892,7 @@ function battle(atkType, atkColor, defType, defColor, atSq){
       var a=d6(), bd=d6();
       rounds.push(a+"–"+bd);
       turnCount++;
-      dieA.classList.remove("settle"); dieD.classList.remove("settle");
+      wrapA.classList.remove("settle"); wrapD.classList.remove("settle");
       void dieA.offsetWidth;
 
       if(reduced){
@@ -840,7 +908,7 @@ function battle(atkType, atkColor, defType, defColor, atSq){
       sndDie(0.02); sndDie(0.10);       // leaving the hand
       sndDie(0.95); sndDie(1.05);       // clattering to rest
       setTimeout(function(){
-        dieA.classList.add("settle"); dieD.classList.add("settle");
+        wrapA.classList.add("settle"); wrapD.classList.add("settle");
         land(a,bd);
       }, 1200);
     }
@@ -866,7 +934,10 @@ function battle(atkType, atkColor, defType, defColor, atSq){
 
       var go=document.getElementById("battleGo");
       go.style.display="block";
-      go.focus();
+      /* preventScroll matters: on a phone the panel can be taller than the
+         viewport, and a plain focus() scrolls the button into view — which
+         pushes the dice the player is trying to read off the top. */
+      try{ go.focus({preventScroll:true}); }catch(err){ /* older browsers */ }
       var done=false;
       function finish(){
         if(done) return; done=true;
@@ -1363,6 +1434,7 @@ function onPointerDown(e){
   audio();   // first user gesture — unlock sound
   var targets={};
   moves.forEach(function(m){ targets[m.to]=true; });
+  if(e.cancelable) e.preventDefault();   // stop the touch becoming a page pan
   dragState={from:i, targets:targets, startX:e.clientX, startY:e.clientY,
              moved:false, ghost:null, pointerId:e.pointerId};
   var wasSelected=(selected===i);
@@ -1376,6 +1448,7 @@ function onPointerDown(e){
 
 function onPointerMove(e){
   if(!dragState || e.pointerId!==dragState.pointerId) return;
+  if(e.cancelable) e.preventDefault();
   var dx=e.clientX-dragState.startX, dy=e.clientY-dragState.startY;
   if(!dragState.moved && Math.hypot(dx,dy) < DRAG_THRESHOLD) return;
 
@@ -1392,7 +1465,6 @@ function onPointerMove(e){
     dragState.ghost=ghost;
     render();
   }
-  e.preventDefault();
   dragState.ghost.style.left=e.clientX+"px";
   dragState.ghost.style.top =e.clientY+"px";
 }
@@ -1546,15 +1618,6 @@ botSideSel.addEventListener("change", function(){
   render(); maybeBot();
 });
 
-var sndToggle=document.getElementById("soundToggle");
-soundOn = loadPref("gambit.sound","1")==="1";
-sndToggle.checked=soundOn;
-sndToggle.addEventListener("change", function(){
-  soundOn=this.checked;
-  savePref("gambit.sound", soundOn?"1":"0");
-  if(soundOn){ audio(); sndMove(); }     // confirm it's audible
-});
-
 var rotToggle=document.getElementById("rotateToggle");
 try{ rotate = localStorage.getItem("gambit.rotate")==="1"; }catch(e){ rotate=false; }
 rotToggle.checked=rotate;
@@ -1597,7 +1660,11 @@ if("serviceWorker" in navigator && location.protocol.indexOf("http")===0){
 window.__G={freshState:freshState,legalMoves:legalMoves,applyMove:applyMove,opp:opp,
             inCheck:inCheck,chooseBotMove:chooseBotMove,evaluate:evaluate,LEVELS:LEVELS,
             getNodes:function(){return nodes;},
-            buildDie:buildDie,rollDie:rollDie,FACE_ROT:FACE_ROT,PIPS:PIPS};
+            buildDie:buildDie,rollDie:rollDie,FACE_ROT:FACE_ROT,PIPS:PIPS,
+            audioInfo:function(){return {ctx:actx,master:master,ready:audioReady,
+                                         state:actx?actx.state:"none"};},
+            snd:{move:sndMove,capture:sndCapture,repel:sndRepel,die:sndDie,
+                 check:sndCheck,end:sndEnd}};
 
 })();
 </script>
