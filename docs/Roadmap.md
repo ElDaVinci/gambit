@@ -59,10 +59,30 @@ pawn-takes-queen 20/20. Strength is correctly ordered — medium 6–0 easy, har
 8 headless self-play games all terminated in checkmate with no hangs; observed capture
 failure rate 45%, matching the 50% model.
 
-## Phase 5 — next
+## Phase 5 — ship as an installable app ✅ DONE
+
+Live at **https://eldavinci.github.io/gambit/** (repo: `ElDaVinci/gambit`, public,
+Pages from `main` / root).
+
+PWA: `manifest.webmanifest` + `sw.js` + `icons/`. Verified on the live host — service
+worker registers and goes active, scope is correct, all 8 shell assets cached, HTTPS
+enforced, every asset serves with the right MIME type.
+
+**Why package before finishing the game:** a PWA wrapper is decoupled from the content.
+Shipping a change is `git push` — the service worker updates itself, no re-packaging, no
+store review. That is *not* true of a native app, where every iteration costs a rebuild
+and an Apple review cycle. And getting it onto a phone home screen is what makes real
+playtesting actually happen. Native remains an option later; it buys only store
+discovery, push notifications, and in-app purchase, none of which matter yet.
+
+**Release discipline:** bump `CACHE` in `sw.js` on every ship, or clients keep the stale
+cache. Run `bash tools/build-artifact.sh` too, so the Artifact copy stays in sync.
+
+## Phase 6 — next
 
 - **Playtest.** Does the 50/50-everything feel good, or too swingy? Tune from real games.
   Self-play shows only 6–22 captures per game — material really is "sticky", as predicted.
+  This is the biggest open risk in the project, and it is a design risk, not a technical one.
 - Optional simulator: N random/greedy games, dump capture-attempt and game-length stats.
 - Undo / takeback (tricky with committed dice — decide the rule first).
 - Resolve the open §8 question (in-check speculative captures elsewhere on the board).

@@ -7,10 +7,12 @@ Inspired by the battle resolution in Risk (Risiko).
 
 ## Play it
 
-- **Locally:** double-click [`index.html`](index.html) — it's a single self-contained file,
-  no install, works in any modern browser on desktop or phone.
-- **Shared link:** published as a private Artifact (opens on phones). See the chat where it
-  was created for the URL, or `/artifacts` in Claude Code.
+**→ https://eldavinci.github.io/gambit/**
+
+Public, no sign-in, works on phones. Installs to your home screen (see below).
+
+You can also just double-click [`index.html`](index.html) — it's a single self-contained
+file that runs straight off disk, no server needed.
 
 ## The v1 ruleset (short version)
 
