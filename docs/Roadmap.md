@@ -154,6 +154,29 @@ Two bugs found while building it, both worth remembering:
   rendered underneath the menu. Same trap as `.fields[hidden]` earlier — every element
   toggled with `hidden` now restates `display:none`.
 
+## Start screen, second pass ✅ DONE
+
+The first version was a list of labelled boxes — it read as a settings screen, not a chess
+game, and said nothing about the dice. Rebuilt so the screen **states the premise by
+demonstrating it**:
+
+- A **live capture** at the top: a knight stands over a pawn with the target ringed in red,
+  and two real 3D dice keep rolling to decide it — "Capture — the pawn falls" /
+  "Repelled — the knight is lost". Same dice, same odds, same tie re-rolls as the game.
+  The loop pauses while a game is running.
+- **Chess pieces as the difficulty scale** instead of letters: pawn → knight → rook →
+  queen for Low → Medium → Hard → Master. Rising piece value carries the meaning without a
+  word of explanation. Two players shows both kings; Training shows a die face.
+- Each icon sits on a board square, and the **piece colour follows the square** (white on
+  dark, black on light) so it always reads — the first attempt put white pieces on light
+  squares and they washed out.
+
+Two CSS lessons, both about ordering and specificity:
+- `.dieWrap` is defined later in the stylesheet than the hero rules, so `.heroDie` lost and
+  the hero dice inherited the overlay's 64px. Needed `.heroRoll .dieWrap` to win.
+- The hero took 359px of an 812px phone screen; a `max-width:430px` block brings it to
+  231px so all four difficulty tiles are visible without scrolling.
+
 ## Phase 6 — next
 
 - **Playtest.** Does the 50/50-everything feel good, or too swingy? Tune from real games.

@@ -140,10 +140,50 @@ body{
 /* ---- start screen ---- */
 .menu{max-width:520px;margin:6px auto 0;display:flex;flex-direction:column;gap:10px}
 .menu[hidden]{display:none}
-.menuTitle{font-family:"Zilla Slab",Georgia,serif;font-weight:600;font-size:22px;margin:0}
-.menuHint{margin:0 0 6px;color:var(--muted);font-size:13.5px;text-wrap:balance}
 .menuGroup{margin:8px 0 0;font-size:11px;font-weight:600;letter-spacing:.12em;
   text-transform:uppercase;color:var(--muted)}
+
+/* ---- the pitch: a live capture being decided ---- */
+.hero{background:var(--surface);border:1px solid var(--line);border-radius:16px;
+  padding:16px;box-shadow:var(--shadow);display:flex;flex-direction:column;align-items:center;gap:4px}
+.heroStage{display:flex;align-items:center;justify-content:center;gap:clamp(14px,5vw,30px);
+  flex-wrap:wrap}
+.heroBoard{display:grid;grid-template-columns:repeat(3,1fr);
+  width:132px;border-radius:8px;overflow:hidden;
+  box-shadow:0 8px 22px -12px rgba(0,0,0,.6);flex:none}
+.heroBoard .hsq{position:relative;aspect-ratio:1;display:grid;place-items:center}
+.heroBoard .hsq svg{width:78%;height:78%}
+.heroBoard .hsq.target::after{content:"";position:absolute;inset:8%;border-radius:50%;
+  border:3px solid var(--repel);box-shadow:0 0 8px -1px var(--repel);
+  animation:targetPulse 3.4s ease-in-out infinite}
+@keyframes targetPulse{0%,100%{opacity:.55}50%{opacity:1}}
+.heroRoll{display:flex;align-items:center;gap:14px}
+/* .dieWrap / .dieBox are defined later in this stylesheet, so these need the
+   extra class to win — otherwise the hero dice inherit the overlay's 64px. */
+.heroRoll .dieWrap,.heroRoll .dieBox{width:52px;height:52px;--half:26px}
+.heroRoll .dieShadow{width:42px;top:57px}
+.heroVs{font-family:"Zilla Slab",Georgia,serif;font-size:13px;color:var(--muted);
+  letter-spacing:.08em}
+.heroVerdict{margin:16px 0 0;font-family:"Zilla Slab",Georgia,serif;font-weight:700;
+  font-size:17px;min-height:1.3em;transition:color .2s}
+.heroVerdict.win{color:var(--advance)}
+.heroVerdict.lose{color:var(--repel)}
+.heroCaption{margin:2px 0 0;font-size:13px;color:var(--ink-soft);text-align:center;
+  line-height:1.5;text-wrap:balance;max-width:38ch}
+.heroCaption em{font-style:normal;color:var(--repel);font-weight:600}
+/* On a phone the hero must not eat the screen the tiles need. */
+@media (max-width:430px){
+  .hero{padding:12px;border-radius:14px}
+  .heroBoard{width:104px}
+  .heroRoll .dieWrap,.heroRoll .dieBox{width:44px;height:44px;--half:22px}
+  .heroRoll .dieShadow{width:36px;top:48px}
+  .heroStage{gap:16px}
+  .heroVerdict{margin-top:12px;font-size:15px}
+  .heroCaption{font-size:12.5px}
+  .mode{padding:12px}
+  .mIcon{width:36px;height:36px}
+  .mDesc{font-size:12px}
+}
 .modeGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .mode{
   font:inherit;text-align:left;cursor:pointer;color:var(--ink);
@@ -154,15 +194,30 @@ body{
 .mode:hover{border-color:var(--brass);transform:translateY(-2px)}
 .mode:active{transform:none}
 .mode:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
-.mLetter{font-family:"Zilla Slab",Georgia,serif;font-weight:700;font-size:26px;
-  line-height:1;color:var(--brass)}
+/* The icon sits on a board square, so each tile reads as a chess tile. Rising
+   piece value doubles as the difficulty scale: pawn, knight, rook, queen. */
+.mIcon{width:42px;height:42px;border-radius:9px;display:grid;place-items:center;
+  background:var(--board-dark);flex:none;position:relative}
+.mIcon[data-sq="light"]{background:var(--board-light)}
+.mIcon svg{width:76%;height:76%}
+.mIcon.pair{gap:0}
+.mIcon.pair svg{width:56%;height:56%;position:absolute}
+.mIcon.pair svg:first-child{transform:translate(-24%,-8%)}
+.mIcon.pair svg:last-child{transform:translate(24%,8%)}
 .mName{font-weight:600;font-size:15px}
 .mDesc{font-size:12.5px;color:var(--muted);line-height:1.35;text-wrap:balance}
 .mode.wide{flex-direction:row;align-items:center;gap:14px;padding:15px 16px}
-.mode.wide .mLetter{font-size:22px;min-width:34px}
 .mode.wide .mBody{display:flex;flex-direction:column;gap:2px}
 .mode.train{background:linear-gradient(180deg,var(--surface),var(--surface-2));
   border-color:color-mix(in srgb,var(--brass) 45%,var(--line))}
+/* flat die face, for the training tile */
+.mIcon.die{background:linear-gradient(150deg,#fbf7ea,#e6dcc2);
+  border:1px solid rgba(90,80,55,.30);
+  display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);
+  padding:7px;gap:1px}
+.mIcon.die span{display:grid;place-items:center}
+.mIcon.die i{width:7px;height:7px;border-radius:50%;
+  background:radial-gradient(circle at 34% 30%,#5d5340,#241f16)}
 
 /* ---- training ---- */
 .trainBar{margin-top:12px;background:var(--surface);border:1px solid var(--line);
@@ -514,35 +569,48 @@ details.rules .body li{margin:3px 0}
 
   <!-- start screen: pick an opponent before the board appears -->
   <section class="menu" id="menu">
-    <h2 class="menuTitle">Choose a game</h2>
-    <p class="menuHint">Chess you already know &mdash; but every capture is decided by dice.</p>
+    <!-- The pitch, shown rather than told: a knight attacks a pawn and the dice
+         keep deciding it, over and over, right on the start screen. -->
+    <div class="hero">
+      <div class="heroStage">
+        <div class="heroBoard" id="heroBoard" aria-hidden="true"></div>
+        <div class="heroRoll">
+          <div class="dieWrap heroDie"><div class="dieBox" id="heroDieA"></div><div class="dieShadow"></div></div>
+          <span class="heroVs">vs</span>
+          <div class="dieWrap heroDie"><div class="dieBox" id="heroDieD"></div><div class="dieShadow"></div></div>
+        </div>
+      </div>
+      <p class="heroVerdict" id="heroVerdict">&nbsp;</p>
+      <p class="heroCaption">Chess, piece for piece. But you never simply take a piece &mdash;
+        you attack it, and the dice decide. Roll lower and it is <em>your</em> piece that falls.</p>
+    </div>
 
     <p class="menuGroup">Play the computer</p>
     <div class="modeGrid">
       <button class="mode" type="button" data-mode="bot" data-level="easy">
-        <span class="mLetter">L</span>
+        <span class="mIcon" data-sq="dark" data-piece="p"></span>
         <span class="mName">Low</span>
         <span class="mDesc">Loose and impulsive. A gentle start.</span>
       </button>
       <button class="mode" type="button" data-mode="bot" data-level="medium">
-        <span class="mLetter">M</span>
+        <span class="mIcon" data-sq="light" data-piece="n"></span>
         <span class="mName">Medium</span>
         <span class="mDesc">Looks a move ahead. Takes fair trades.</span>
       </button>
       <button class="mode" type="button" data-mode="bot" data-level="hard">
-        <span class="mLetter">H</span>
+        <span class="mIcon" data-sq="dark" data-piece="r"></span>
         <span class="mName">Hard</span>
         <span class="mDesc">Three moves deep. Rarely gambles badly.</span>
       </button>
       <button class="mode" type="button" data-mode="bot" data-level="master">
-        <span class="mLetter">E</span>
+        <span class="mIcon" data-sq="light" data-piece="q"></span>
         <span class="mName">Master</span>
         <span class="mDesc">Deepest search. Punishes loose attacks.</span>
       </button>
     </div>
 
     <button class="mode wide" type="button" data-mode="hotseat">
-      <span class="mLetter">2P</span>
+      <span class="mIcon pair" data-sq="dark" data-piece="k" data-piece2="k"></span>
       <span class="mBody">
         <span class="mName">Two players</span>
         <span class="mDesc">Share one device and pass it back and forth.</span>
@@ -550,7 +618,7 @@ details.rules .body li{margin:3px 0}
     </button>
 
     <button class="mode wide train" type="button" data-mode="training">
-      <span class="mLetter">&#9654;</span>
+      <span class="mIcon" id="trainDie"></span>
       <span class="mBody">
         <span class="mName">Training</span>
         <span class="mDesc">Five short lessons on how Gambit differs from chess.</span>
@@ -2180,6 +2248,68 @@ function checkLesson(h){
   if(ok){ lessonDone=true; renderLesson(); }
 }
 
+/* ================= start-screen showpiece =================
+   A knight stands over a pawn and the dice keep deciding it. Same dice, same
+   odds and same outcomes as the real game, so the start screen states the rule
+   by demonstrating it rather than describing it. */
+function buildMenuArt(){
+  // chess piece on each mode tile
+  document.querySelectorAll(".mIcon[data-piece]").forEach(function(el){
+    // piece colour follows the square it stands on, so it always reads clearly
+    var side = el.dataset.sq==="light" ? "b" : "w";
+    var html=pieceSVG(side, el.dataset.piece);
+    if(el.dataset.piece2) html=pieceSVG(opp(side), el.dataset.piece2)+html;
+    el.innerHTML=html;
+  });
+  // a flat die face for the training tile
+  var td=document.getElementById("trainDie");
+  if(td){
+    td.classList.add("die");
+    var lit=PIPS[5], h="";
+    for(var c=1;c<=9;c++) h+="<span>"+(lit.indexOf(c)>=0?"<i></i>":"")+"</span>";
+    td.innerHTML=h;
+  }
+  // the 3x3 board fragment: white knight, black pawn, pawn ringed as the target
+  var hb=document.getElementById("heroBoard");
+  if(!hb) return;
+  var cells=[
+    {d:0}, {d:1, pc:["b","p"], target:true}, {d:0},
+    {d:1}, {d:0, pc:["w","n"]},              {d:1},
+    {d:0}, {d:1},                            {d:0}
+  ];
+  hb.innerHTML = cells.map(function(c){
+    return '<div class="hsq'+(c.target?" target":"")+'" style="background:var(--board-'+
+           (c.d?"dark":"light")+')">'+(c.pc?pieceSVG(c.pc[0],c.pc[1]):"")+'</div>';
+  }).join("");
+}
+
+var heroTimer=null;
+function startHeroLoop(){
+  var A=document.getElementById("heroDieA"), D=document.getElementById("heroDieD");
+  var V=document.getElementById("heroVerdict");
+  if(!A||!D) return;
+  buildDie(A); buildDie(D);
+  var spins=0;
+  function roll(){
+    if(document.getElementById("menu").hidden) return;   // paused while playing
+    var a=d6(), b=d6();
+    while(a===b){ a=d6(); b=d6(); }                      // ties re-roll, as in the game
+    spins++;
+    if(reduced){ rollDie(A,a,0); rollDie(D,b,0); }
+    else { rollDie(A,a,1+spins); rollDie(D,b,2+spins); }
+    var settle = reduced ? 40 : 1150;
+    setTimeout(function(){
+      var win=a>b;
+      V.textContent = win ? "Capture — the pawn falls" : "Repelled — the knight is lost";
+      V.className = "heroVerdict "+(win?"win":"lose");
+    }, settle);
+  }
+  roll();
+  clearInterval(heroTimer);
+  heroTimer=setInterval(roll, reduced ? 2600 : 3400);
+}
+function stopHeroLoop(){ clearInterval(heroTimer); heroTimer=null; }
+
 /* ================= screens ================= */
 function showMenu(){
   stopTraining();
@@ -2188,8 +2318,10 @@ function showMenu(){
   document.getElementById("gameover").classList.remove("show");
   document.getElementById("menu").hidden=false;
   document.getElementById("gameView").hidden=true;
+  startHeroLoop();
 }
 function showGame(){
+  stopHeroLoop();
   document.getElementById("menu").hidden=true;
   document.getElementById("gameView").hidden=false;
 }
@@ -2387,6 +2519,7 @@ themeBtn.addEventListener("click", function(){
 })();
 
 buildBoard();
+buildMenuArt();
 newGame();
 showMenu();          // the board waits behind the start screen
 
