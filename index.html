@@ -130,11 +130,55 @@ body{
 
 /* ---- game grid ---- */
 .game{display:grid;grid-template-columns:minmax(300px,1fr) 296px;gap:22px;align-items:start}
+/* an author display value outranks the UA [hidden] rule — restate it */
+.game[hidden]{display:none}
 @media (max-width:800px){ .game{grid-template-columns:1fr;gap:16px} }
 
 /* ---- board ---- */
 .board-wrap{width:100%;max-width:min(76vh,560px);margin-inline:auto}
 @media (max-width:800px){ .board-wrap{max-width:min(94vw,520px)} }
+/* ---- start screen ---- */
+.menu{max-width:520px;margin:6px auto 0;display:flex;flex-direction:column;gap:10px}
+.menu[hidden]{display:none}
+.menuTitle{font-family:"Zilla Slab",Georgia,serif;font-weight:600;font-size:22px;margin:0}
+.menuHint{margin:0 0 6px;color:var(--muted);font-size:13.5px;text-wrap:balance}
+.menuGroup{margin:8px 0 0;font-size:11px;font-weight:600;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--muted)}
+.modeGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mode{
+  font:inherit;text-align:left;cursor:pointer;color:var(--ink);
+  background:var(--surface);border:1px solid var(--line);border-radius:14px;
+  padding:14px;display:flex;flex-direction:column;gap:3px;box-shadow:var(--shadow);
+  transition:border-color .15s, transform .12s
+}
+.mode:hover{border-color:var(--brass);transform:translateY(-2px)}
+.mode:active{transform:none}
+.mode:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+.mLetter{font-family:"Zilla Slab",Georgia,serif;font-weight:700;font-size:26px;
+  line-height:1;color:var(--brass)}
+.mName{font-weight:600;font-size:15px}
+.mDesc{font-size:12.5px;color:var(--muted);line-height:1.35;text-wrap:balance}
+.mode.wide{flex-direction:row;align-items:center;gap:14px;padding:15px 16px}
+.mode.wide .mLetter{font-size:22px;min-width:34px}
+.mode.wide .mBody{display:flex;flex-direction:column;gap:2px}
+.mode.train{background:linear-gradient(180deg,var(--surface),var(--surface-2));
+  border-color:color-mix(in srgb,var(--brass) 45%,var(--line))}
+
+/* ---- training ---- */
+.trainBar{margin-top:12px;background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--radius);padding:13px 14px;box-shadow:var(--shadow);
+  display:flex;flex-direction:column;gap:8px}
+.trainBar[hidden]{display:none}
+.tStep{font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--brass)}
+.tTitle{font-family:"Zilla Slab",Georgia,serif;font-weight:600;font-size:17px;margin:0}
+.tText{margin:0;font-size:13.5px;color:var(--ink-soft);line-height:1.5;text-wrap:balance}
+.tTask{margin:0;font-size:13px;padding:8px 10px;border-radius:8px;
+  background:var(--surface-2);border-left:3px solid var(--brass)}
+.tTask.done{border-left-color:var(--advance);color:var(--advance);font-weight:600}
+.tActions{display:flex;gap:8px}
+.tActions .btn{flex:1;justify-content:center}
+
 /* ---- player cards (opponent above the board, you below) ---- */
 .playerCard{display:flex;align-items:center;gap:9px;padding:7px 10px;min-height:46px;
   background:var(--surface);border:1px solid var(--line);border-radius:10px}
@@ -468,7 +512,53 @@ details.rules .body li{margin:3px 0}
     </button>
   </header>
 
-  <main class="game">
+  <!-- start screen: pick an opponent before the board appears -->
+  <section class="menu" id="menu">
+    <h2 class="menuTitle">Choose a game</h2>
+    <p class="menuHint">Chess you already know &mdash; but every capture is decided by dice.</p>
+
+    <p class="menuGroup">Play the computer</p>
+    <div class="modeGrid">
+      <button class="mode" type="button" data-mode="bot" data-level="easy">
+        <span class="mLetter">L</span>
+        <span class="mName">Low</span>
+        <span class="mDesc">Loose and impulsive. A gentle start.</span>
+      </button>
+      <button class="mode" type="button" data-mode="bot" data-level="medium">
+        <span class="mLetter">M</span>
+        <span class="mName">Medium</span>
+        <span class="mDesc">Looks a move ahead. Takes fair trades.</span>
+      </button>
+      <button class="mode" type="button" data-mode="bot" data-level="hard">
+        <span class="mLetter">H</span>
+        <span class="mName">Hard</span>
+        <span class="mDesc">Three moves deep. Rarely gambles badly.</span>
+      </button>
+      <button class="mode" type="button" data-mode="bot" data-level="master">
+        <span class="mLetter">E</span>
+        <span class="mName">Master</span>
+        <span class="mDesc">Deepest search. Punishes loose attacks.</span>
+      </button>
+    </div>
+
+    <button class="mode wide" type="button" data-mode="hotseat">
+      <span class="mLetter">2P</span>
+      <span class="mBody">
+        <span class="mName">Two players</span>
+        <span class="mDesc">Share one device and pass it back and forth.</span>
+      </span>
+    </button>
+
+    <button class="mode wide train" type="button" data-mode="training">
+      <span class="mLetter">&#9654;</span>
+      <span class="mBody">
+        <span class="mName">Training</span>
+        <span class="mDesc">Five short lessons on how Gambit differs from chess.</span>
+      </span>
+    </button>
+  </section>
+
+  <main class="game" id="gameView" hidden>
     <section class="board-wrap" aria-label="Chess board">
       <!-- opponent above the board, you below: the standard chess-app sandwich -->
       <div class="playerCard" id="cardTop">
@@ -487,7 +577,21 @@ details.rules .body li{margin:3px 0}
         <span class="pcAdv" id="advBottom"></span>
       </div>
 
+      <div class="trainBar" id="trainBar" hidden>
+        <span class="tStep" id="tStep">Lesson 1 of 5</span>
+        <h3 class="tTitle" id="tTitle"></h3>
+        <p class="tText" id="tText"></p>
+        <p class="tTask" id="tTask"></p>
+        <div class="tActions">
+          <button class="btn rvGhost" id="tPrev" type="button">Back</button>
+          <button class="btn primary" id="tNext" type="button">Next</button>
+        </div>
+      </div>
+
       <div class="boardTools">
+        <button class="tool" id="menuBtn" type="button" title="Back to the menu">
+          <span class="tIcon">&#9776;</span><span class="tTxt">Menu</span>
+        </button>
         <button class="tool" id="flipBtn" type="button" title="Flip board">
           <span class="tIcon">&#8645;</span><span class="tTxt">Flip</span>
         </button>
@@ -1367,6 +1471,9 @@ function pushHistory(color, mv, result, suffix, detail){
      snaps[0] is the start and snaps[i+1] is the position after history[i]. */
   state.snaps.push({board: state.board.slice(), turn: state.turn,
                     graves:{w:state.graves.w.slice(), b:state.graves.b.slice()}});
+  /* Also here rather than in finalize: several paths return early into endGame,
+     and a lesson can legitimately be completed by the move that ends the game. */
+  checkLesson(e);
   renderLog();
 }
 
@@ -1950,6 +2057,159 @@ function renderReview(){
   render(); renderLog();
 }
 
+/* ================= training =================
+   Five short lessons, each a real position played on the real engine — the dice
+   genuinely roll, so a lesson about losing a capture can actually lose it. */
+function fromLayout(rows){
+  var b=[];
+  rows.forEach(function(rw){
+    for(var k=0;k<rw.length;k++){
+      var ch=rw[k];
+      if(ch==="."){ b.push(""); }
+      else if(/[1-8]/.test(ch)){ for(var z=0;z<+ch;z++) b.push(""); }
+      else b.push((ch===ch.toLowerCase()?"b":"w")+ch.toLowerCase());
+    }
+  });
+  return b;
+}
+
+var LESSONS=[
+  {
+    title:"It is still chess",
+    text:"Every piece moves exactly as it does in ordinary chess. Castling, en passant and "+
+         "promotion are all unchanged. Nothing you already know stops being true.",
+    task:"Make any move.",
+    goal:function(h){ return true; },
+    board:null            // the normal starting position
+  },
+  {
+    title:"A capture is a fight",
+    text:"This is the one rule that changes. You do not simply take a piece — you attack it, "+
+         "and both sides roll a die. Higher wins, ties re-roll. Straight 50/50.",
+    task:"Take the black pawn on d5 with your pawn on e4.",
+    goal:function(h){ return h.capture; },
+    turn:"w",
+    board:fromLayout(["....k...", "........", "........", "...p....",
+                      "....P...", "........", "........", "....K..."])
+  },
+  {
+    title:"Losing costs you the piece",
+    text:"If your attack loses the roll, your attacking piece is removed and the defender "+
+         "stays exactly where it was. You lose material and gain nothing. That is why "+
+         "attacking is a real decision here, not free.",
+    task:"Attack the rook with your pawn. Win or lose, watch what happens to the pawn.",
+    goal:function(h){ return h.capture; },
+    turn:"w",
+    board:fromLayout(["....k...", "........", "........", "...r....",
+                      "....P...", "........", "........", "....K..."])
+  },
+  {
+    title:"The Queen attacks with two dice",
+    text:"The Queen is the one exception. Attacking, she rolls two dice and keeps the higher "+
+         "— about 69% instead of 50%. Defending she rolls one, like everyone else, so she is "+
+         "better at taking pieces but no harder to kill.",
+    task:"Capture the rook with your queen and watch both dice.",
+    goal:function(h){ return h.capture && h.piece==="q"; },
+    turn:"w",
+    board:fromLayout(["....k...", "........", "........", "...r....",
+                      "........", "........", "........", "...QK..."])
+  },
+  {
+    title:"Check, and playing on",
+    text:"The King never rolls dice, so check and checkmate work exactly as in chess. "+
+         "But taking the checking piece is a battle like any other — and if you lose it, "+
+         "you are still in check. So your turn simply continues: you keep moving until the "+
+         "king is safe.",
+    task:"You are in check. Take the rook with your knight — if the knight loses, move again.",
+    goal:function(h){ return !inCheck(state.board, h.color); },
+    turn:"w",
+    /* K+N vs K+R+P — deliberately not a lone minor on either side, or the game
+       would end instantly as insufficient material before the lesson resolves. */
+    board:fromLayout(["....k...", "p.......", "........", "....r...",
+                      "........", "...N....", "........", "....K..."])
+  }
+];
+
+var training=false, lessonIdx=0, lessonDone=false;
+
+function startTraining(){
+  training=true; lessonIdx=0;
+  botOn=false;
+  document.getElementById("trainBar").hidden=false;
+  loadLesson(0);
+}
+function stopTraining(){
+  training=false; lessonDone=false;
+  document.getElementById("trainBar").hidden=true;
+}
+function loadLesson(i){
+  lessonIdx=Math.max(0, Math.min(LESSONS.length-1, i));
+  var L=LESSONS[lessonIdx];
+  lessonDone=false;
+  newGame(true);                       // reset without leaving training
+  if(L.board){
+    state.board=L.board.slice();
+    state.turn=L.turn||"w";
+    state.castling={wK:false,wQ:false,bK:false,bQ:false};
+    state.ep=null;
+    state.snaps=[{board:state.board.slice(), turn:state.turn, graves:{w:[],b:[]}}];
+    state.posCounts={}; state.posCounts[posKey(state)]=1;
+    legalCache=legalMoves(state, state.turn);
+  }
+  renderLesson();
+  render(); renderLog();
+}
+function renderLesson(){
+  var L=LESSONS[lessonIdx];
+  document.getElementById("tStep").textContent="Lesson "+(lessonIdx+1)+" of "+LESSONS.length;
+  document.getElementById("tTitle").textContent=L.title;
+  document.getElementById("tText").textContent=L.text;
+  var t=document.getElementById("tTask");
+  t.textContent = lessonDone ? "Done — nicely played." : L.task;
+  t.classList.toggle("done", lessonDone);
+  document.getElementById("tPrev").disabled = lessonIdx===0;
+  var next=document.getElementById("tNext");
+  next.textContent = lessonIdx===LESSONS.length-1 ? "Finish" : (lessonDone ? "Next lesson" : "Skip");
+}
+/* Called after every ply while training, to see if the lesson's task is met. */
+function checkLesson(h){
+  if(!training || lessonDone) return;
+  var L=LESSONS[lessonIdx];
+  var ok=false;
+  try{ ok = L.goal(h); }catch(e){ ok=false; }
+  if(ok){ lessonDone=true; renderLesson(); }
+}
+
+/* ================= screens ================= */
+function showMenu(){
+  stopTraining();
+  reviewIdx=null;
+  document.getElementById("reviewBar").hidden=true;
+  document.getElementById("gameover").classList.remove("show");
+  document.getElementById("menu").hidden=false;
+  document.getElementById("gameView").hidden=true;
+}
+function showGame(){
+  document.getElementById("menu").hidden=true;
+  document.getElementById("gameView").hidden=false;
+}
+function startMode(mode, level){
+  showGame();
+  if(mode==="training"){ startTraining(); return; }
+  stopTraining();
+  if(mode==="bot"){ botOn=true; botLevel=level||"medium"; botSide="b"; }
+  else { botOn=false; }
+  // keep the Table panel in step with the choice made on the menu
+  var bt=document.getElementById("botToggle");
+  bt.checked=botOn;
+  document.getElementById("botOpts").hidden=!botOn;
+  document.getElementById("botLevel").value=botLevel;
+  document.getElementById("botSide").value=botSide;
+  savePref("gambit.bot", botOn?"1":"0");
+  savePref("gambit.botLevel", botLevel);
+  newGame();
+}
+
 /* ================= game lifecycle ================= */
 function endGame(result, why){
   gameOver=true;
@@ -1962,7 +2222,8 @@ function endGame(result, why){
   document.getElementById("gameover").classList.add("show");
 }
 
-function newGame(){
+function newGame(keepTraining){
+  if(training && !keepTraining) stopTraining();
   state=freshState();
   selected=null; gameOver=false; busy=false; thinking=false; lastMove=null;
   lastBattle=null; reviewIdx=null;
@@ -1990,6 +2251,22 @@ document.getElementById("log").addEventListener("click", function(e){
   if(isNaN(ply)) return;
   if(reviewing()) reviewGo(ply);
   else if(gameOver) enterReview(ply);
+});
+
+/* ---- start screen ---- */
+document.querySelectorAll(".mode").forEach(function(tile){
+  tile.addEventListener("click", function(){
+    audio();                       // menu tap doubles as the audio unlock gesture
+    startMode(this.dataset.mode, this.dataset.level);
+  });
+});
+document.getElementById("menuBtn").addEventListener("click", showMenu);
+
+/* ---- training ---- */
+document.getElementById("tPrev").addEventListener("click", function(){ loadLesson(lessonIdx-1); });
+document.getElementById("tNext").addEventListener("click", function(){
+  if(lessonIdx===LESSONS.length-1){ showMenu(); return; }
+  loadLesson(lessonIdx+1);
 });
 
 document.getElementById("flipBtn").addEventListener("click", function(){
@@ -2111,6 +2388,7 @@ themeBtn.addEventListener("click", function(){
 
 buildBoard();
 newGame();
+showMenu();          // the board waits behind the start screen
 
 /* Register the service worker so the game installs and runs offline.
    Guarded: service workers need a secure origin, so this is a no-op when the

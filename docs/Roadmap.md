@@ -125,6 +125,35 @@ forwards` to *reach* the visible state is fragile — if animations are disabled
 short the splash stays empty, which is exactly what happened in the first version. Under
 `prefers-reduced-motion` the splash is shown un-animated and closes quickly.
 
+## Start screen + training mode ✅ DONE
+
+The app now opens on a **menu** instead of straight onto the board: a 2×2 grid of computer
+strengths (Low / Medium / Hard / Master), a wide **Two players** tile, and a wide
+**Training** tile. Choosing one configures the game and reveals the board; a **Menu**
+button on the board returns.
+
+**Training** is five short lessons, each a real position played on the real engine — the
+dice genuinely roll, so a lesson about losing a capture can actually lose it:
+
+1. *It is still chess* — movement is unchanged. Task: make any move.
+2. *A capture is a fight* — 1d6 vs 1d6, 50/50. Task: take the pawn on d5.
+3. *Losing costs you the piece* — the attacker dies and the defender stays.
+4. *The Queen attacks with two dice* — 69%, and the overlay shows both cubes.
+5. *Check, and playing on* — take the checking rook with the knight; if the knight loses
+   you are still in check and keep moving.
+
+Lesson 5 earns its place: in testing the knight lost the battle, died, White was still in
+check, the turn continued, and the task only completed once the king was safe. The rule
+teaches itself.
+
+Two bugs found while building it, both worth remembering:
+- Lesson 5's first position was K+B vs K — **insufficient material**, so the game ended in
+  a draw the instant it loaded and took an early return that skipped the lesson check.
+  The lesson-completion hook now lives in `pushHistory`, which runs on every path.
+- `.game{display:grid}` outranked the UA `[hidden]{display:none}` rule, so the board
+  rendered underneath the menu. Same trap as `.fields[hidden]` earlier — every element
+  toggled with `hidden` now restates `display:none`.
+
 ## Phase 6 — next
 
 - **Playtest.** Does the 50/50-everything feel good, or too swingy? Tune from real games.
