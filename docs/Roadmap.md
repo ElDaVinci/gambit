@@ -93,6 +93,38 @@ not just what was played, but what the dice did to it.
 Navigation: first/prev/next/last, arrow keys, Home/End, Escape to close, and clicking any
 move in the log jumps straight to it. The board is read-only while reviewing.
 
+## UI pass: standard chess-app conventions ✅ DONE
+
+Adopted the layout conventions common to chess apps (Chess.com being the reference),
+**without** copying their branding — Gambit keeps its slate-and-brass identity, which is
+an asset, and cloning another product's trade dress is not something to do.
+
+What changed:
+- **Player cards** above and below the board — avatar, name, the pieces that side has
+  captured, and its material lead (`+3`). The side to move is ringed in brass. Note the
+  Gambit wrinkle: a *repelled* attacker dies, so it counts toward the defender's lead.
+- **Coordinates inside the board edge** instead of outer gutters — standard, and it gives
+  the board noticeably more room on a phone.
+- **Board tools** under the board: Flip · Review · New game.
+- **Manual board flip**, independent of the existing auto-rotate option.
+- **Two-column move list** (number · White · Black) instead of one row per ply. A Gambit
+  turn can hold several plies when playing on out of check, so a row keeps filling its
+  column rather than assuming one ply per side.
+
+Measured on a 375px viewport: board 343×343, cards flush to the board width, cards +
+board + tools all above the fold, no horizontal scroll.
+
+## Opening animation ✅ DONE
+
+On load the board tiles in square by square on a diagonal sweep, the back rank drops onto
+it, and the wordmark resolves. ~2.1s, skippable by tapping or the Skip button.
+
+**Built so it can never leave a blank screen:** everything is visible by default and the
+animation is layered on top under an `.animate` class. Relying on `animation-fill-mode:
+forwards` to *reach* the visible state is fragile — if animations are disabled or cut
+short the splash stays empty, which is exactly what happened in the first version. Under
+`prefers-reduced-motion` the splash is shown un-animated and closes quickly.
+
 ## Phase 6 — next
 
 - **Playtest.** Does the 50/50-everything feel good, or too swingy? Tune from real games.

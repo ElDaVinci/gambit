@@ -69,6 +69,41 @@
   --shadow:0 1px 2px rgba(0,0,0,.25),0 10px 34px rgba(0,0,0,.40);
 }
 
+/* ================= opening animation =================
+   The board tiles in square by square, the back rank drops onto it, then the
+   wordmark resolves. Skippable, and skipped entirely under reduced-motion. */
+.splash{position:fixed;inset:0;z-index:200;display:grid;place-items:center;
+  background:var(--bg);transition:opacity .45s ease, visibility .45s}
+.splash.done{opacity:0;visibility:hidden;pointer-events:none}
+.splashInner{position:relative;display:flex;flex-direction:column;align-items:center}
+.splashBoard{display:grid;grid-template-columns:repeat(8,1fr);
+  width:min(62vw,232px);aspect-ratio:1;border-radius:8px;overflow:hidden;
+  box-shadow:0 18px 40px -18px rgba(0,0,0,.55)}
+/* Everything is visible by default and the animation is layered on top under
+   .animate. Never rely on animation-fill-mode to REACH the visible state: if
+   animations are disabled or cut short, the splash would stay blank. */
+.splashBoard i{display:block;aspect-ratio:1}
+.splashRank{position:absolute;top:0;width:min(62vw,232px);
+  display:grid;grid-template-columns:repeat(8,1fr);height:calc(min(62vw,232px)/8)}
+.splashRank svg{width:100%;height:100%}
+.splashMark{font-family:"Zilla Slab",Georgia,serif;font-weight:700;
+  font-size:clamp(30px,9vw,44px);letter-spacing:.01em;margin:20px 0 0;color:var(--ink)}
+.splashSub{margin:5px 0 0;font-size:12.5px;letter-spacing:.05em;color:var(--muted)}
+
+.splash.animate .splashBoard i{opacity:0;transform:scale(.35);
+  animation:tileIn .42s cubic-bezier(.2,.9,.3,1) forwards}
+.splash.animate .splashRank svg{opacity:0;transform:translateY(-26px);
+  animation:dropIn .5s cubic-bezier(.24,1.2,.4,1) forwards}
+.splash.animate .splashMark{opacity:0;animation:markIn .55s ease-out .95s forwards}
+.splash.animate .splashSub{opacity:0;animation:markIn .55s ease-out 1.15s forwards}
+.splashSkip{position:absolute;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));
+  font:inherit;font-size:12px;color:var(--muted);background:none;border:0;
+  padding:8px 10px;cursor:pointer;letter-spacing:.06em;text-transform:uppercase}
+.splashSkip:hover{color:var(--ink)}
+@keyframes tileIn{to{opacity:1;transform:none}}
+@keyframes dropIn{to{opacity:1;transform:none}}
+@keyframes markIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+
 *{box-sizing:border-box}
 html,body{margin:0}
 body{
@@ -100,12 +135,36 @@ body{
 /* ---- board ---- */
 .board-wrap{width:100%;max-width:min(76vh,560px);margin-inline:auto}
 @media (max-width:800px){ .board-wrap{max-width:min(94vw,520px)} }
-.coords{display:grid;grid-template-columns:1.4em 1fr;grid-template-rows:1fr 1.4em;gap:4px}
-.rank-labels,.file-labels{display:grid;color:var(--muted);font-family:"IBM Plex Mono",monospace;font-size:11px}
-.rank-labels{grid-row:1;grid-column:1;grid-template-rows:repeat(8,1fr);align-items:center;justify-items:center}
-.file-labels{grid-row:2;grid-column:2;grid-template-columns:repeat(8,1fr);align-items:center;justify-items:center}
+/* ---- player cards (opponent above the board, you below) ---- */
+.playerCard{display:flex;align-items:center;gap:9px;padding:7px 10px;min-height:46px;
+  background:var(--surface);border:1px solid var(--line);border-radius:10px}
+#cardTop{margin-bottom:6px}
+#cardBottom{margin-top:6px}
+.playerCard.toMove{border-color:var(--brass);
+  box-shadow:0 0 0 1px var(--brass), 0 0 12px -4px var(--brass)}
+.pcAvatar{width:30px;height:30px;flex:none;border-radius:8px;display:grid;place-items:center;
+  border:1px solid var(--line);background:var(--surface-2)}
+.pcAvatar svg{width:22px;height:22px}
+.pcName{font-weight:600;font-size:13.5px;white-space:nowrap}
+.pcName .sub{font-weight:400;color:var(--muted);font-size:12px}
+.pcTaken{display:flex;flex-wrap:wrap;gap:0;flex:1;min-width:0;align-items:center}
+.pcTaken svg{width:15px;height:15px;margin-right:-4px}
+.pcAdv{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-soft);
+  font-variant-numeric:tabular-nums;flex:none}
+
+/* ---- board controls ---- */
+.boardTools{display:flex;gap:8px;margin-top:10px}
+.tool{flex:1;font:inherit;font-size:12.5px;font-weight:500;color:var(--ink-soft);
+  background:var(--surface);border:1px solid var(--line);border-radius:10px;
+  padding:9px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px}
+.tool:hover:not(:disabled){color:var(--ink);border-color:var(--brass)}
+.tool:disabled{opacity:.4;cursor:default}
+.tool:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+.tool .tIcon{font-size:15px;line-height:1}
+.tool.primaryTool{background:var(--brass);color:#1a1710;border-color:transparent;font-weight:600}
+.tool.primaryTool:hover{background:var(--brass-bright);color:#1a1710}
+
 .board{
-  grid-row:1;grid-column:2;
   display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);
   aspect-ratio:1;border:1px solid var(--line);border-radius:6px;overflow:hidden;box-shadow:var(--shadow);
   /* none, not manipulation: a touch starting on the board must drag a piece,
@@ -170,6 +229,14 @@ body.dragging .sq{cursor:grabbing}
   box-shadow:inset 0 0 0 3px var(--repel)}
 .sq .move-dot{position:absolute;width:26%;height:26%;border-radius:50%;background:var(--dot);z-index:1}
 .sq .capture-ring{position:absolute;inset:8%;border-radius:50%;border:3px solid var(--dot);z-index:1}
+/* Coordinates sit inside the board edge rather than in outer gutters — the
+   standard chess-app treatment, and it gives the board more room on a phone. */
+.sq .coord{position:absolute;font-family:"IBM Plex Mono",monospace;font-size:9px;
+  font-weight:500;line-height:1;z-index:3;pointer-events:none;opacity:.75}
+.sq .coord.file{right:3px;bottom:2px}
+.sq .coord.rank{left:3px;top:2px}
+.sq .coord{color:var(--board-dark)}
+.sq.dark .coord{color:var(--board-light)}
 
 /* ---- game review ---- */
 .reviewBar{margin-top:12px;background:var(--surface);border:1px solid var(--line);
@@ -191,11 +258,6 @@ body.dragging .sq{cursor:grabbing}
 .rvActions{display:flex;gap:8px}
 .rvActions .btn{flex:1;justify-content:center}
 .rvGhost{background:transparent}
-.log .entry{cursor:pointer}
-.log .entry:hover{background:color-mix(in srgb,var(--brass) 18%,transparent)}
-.log .entry.at{background:color-mix(in srgb,var(--brass) 30%,transparent);
-  box-shadow:inset 2px 0 0 var(--brass)}
-
 /* ---- rail ---- */
 .rail{display:flex;flex-direction:column;gap:14px;min-width:0}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow)}
@@ -246,13 +308,21 @@ body.dragging .sq{cursor:grabbing}
 .grave .glyph{width:20px;height:20px;stroke-width:2}
 .grave .adv{font-size:11px;color:var(--muted);font-family:"IBM Plex Mono",monospace}
 
-.log{font-family:"IBM Plex Mono",monospace;font-size:12.5px;max-height:230px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
-.log .entry{display:grid;grid-template-columns:2.4em 3.2em 1fr;gap:6px;padding:2px 4px;border-radius:5px;font-variant-numeric:tabular-nums}
-.log .entry:nth-child(odd){background:var(--surface-2)}
-.log .entry .n{color:var(--muted)}
-.log .entry .side{color:var(--ink-soft)}
-.log .entry .mv .ok{color:var(--advance)}
-.log .entry .mv .no{color:var(--repel)}
+/* Move list in numbered rows with a White and a Black column, as chess apps do,
+   rather than one row per ply — twice as compact and far easier to scan. */
+.log{font-family:"IBM Plex Mono",monospace;font-size:12.5px;max-height:240px;overflow-y:auto}
+.moveRow{display:grid;grid-template-columns:2.2em 1fr 1fr;gap:4px;align-items:stretch}
+.moveRow:nth-child(odd){background:var(--surface-2)}
+.moveRow .n{color:var(--muted);padding:4px 2px 4px 5px;font-variant-numeric:tabular-nums}
+.ply{padding:4px 6px;border-radius:5px;cursor:pointer;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.ply:hover{background:color-mix(in srgb,var(--brass) 18%,transparent)}
+.ply.at{background:color-mix(in srgb,var(--brass) 30%,transparent);
+  box-shadow:inset 2px 0 0 var(--brass)}
+.ply.blank{cursor:default}
+.ply.blank:hover{background:none}
+.ply .ok{color:var(--advance)}
+.ply .no{color:var(--repel)}
 .log .empty{color:var(--muted)}
 
 details.rules{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:0 14px;box-shadow:var(--shadow)}
@@ -367,6 +437,17 @@ details.rules .body li{margin:3px 0}
 </style>
 </head>
 <body>
+<!-- opening animation: the board assembles, the back rank drops in, a die lands -->
+<div class="splash" id="splash">
+  <div class="splashInner">
+    <div class="splashBoard" id="splashBoard" aria-hidden="true"></div>
+    <div class="splashRank" id="splashRank" aria-hidden="true"></div>
+    <h1 class="splashMark">Gambit</h1>
+    <p class="splashSub">every capture is a roll of the dice</p>
+  </div>
+  <button class="splashSkip" id="splashSkip" type="button">Skip</button>
+</div>
+
 <!-- piece shapes: plain solid silhouettes, one closed outline each -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
 <path id="pc-p" d="M22.5 5a6 6 0 0 1 3.6 10.8c2.4 1.6 4.2 4.6 4.7 8.4l.8 6h3.4l1.5 5h-28l1.5-5h3.4l.8-6c.5-3.8 2.3-6.8 4.7-8.4A6 6 0 0 1 22.5 5z"/>
@@ -389,10 +470,33 @@ details.rules .body li{margin:3px 0}
 
   <main class="game">
     <section class="board-wrap" aria-label="Chess board">
-      <div class="coords">
-        <div class="rank-labels" id="rankLabels" aria-hidden="true"></div>
-        <div class="board" id="board" role="grid" aria-label="Gambit board"></div>
-        <div class="file-labels" id="fileLabels" aria-hidden="true"></div>
+      <!-- opponent above the board, you below: the standard chess-app sandwich -->
+      <div class="playerCard" id="cardTop">
+        <span class="pcAvatar" id="avTop"></span>
+        <span class="pcName" id="nameTop">Black</span>
+        <span class="pcTaken" id="takenTop"></span>
+        <span class="pcAdv" id="advTop"></span>
+      </div>
+
+      <div class="board" id="board" role="grid" aria-label="Gambit board"></div>
+
+      <div class="playerCard" id="cardBottom">
+        <span class="pcAvatar" id="avBottom"></span>
+        <span class="pcName" id="nameBottom">White</span>
+        <span class="pcTaken" id="takenBottom"></span>
+        <span class="pcAdv" id="advBottom"></span>
+      </div>
+
+      <div class="boardTools">
+        <button class="tool" id="flipBtn" type="button" title="Flip board">
+          <span class="tIcon">&#8645;</span><span class="tTxt">Flip</span>
+        </button>
+        <button class="tool" id="reviewBtn" type="button" title="Review the game" disabled>
+          <span class="tIcon">&#9635;</span><span class="tTxt">Review</span>
+        </button>
+        <button class="tool primaryTool" id="newGameBtn" type="button" title="Start a new game">
+          <span class="tIcon">&#43;</span><span class="tTxt">New game</span>
+        </button>
       </div>
 
       <div class="reviewBar" id="reviewBar" hidden>
@@ -427,7 +531,6 @@ details.rules .body li{margin:3px 0}
       <div class="card">
         <h2>Table</h2>
         <div class="controls">
-          <button class="btn primary" id="newGameBtn" type="button">New game</button>
           <label class="switch"><span>Play against the computer</span>
             <input type="checkbox" id="botToggle"><span class="track"></span></label>
           <div class="fields" id="botOpts" hidden>
@@ -448,14 +551,6 @@ details.rules .body li{margin:3px 0}
           </div>
           <label class="switch"><span>Rotate board each turn</span>
             <input type="checkbox" id="rotateToggle"><span class="track"></span></label>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2>Fallen</h2>
-        <div class="graves">
-          <div class="grave"><h3>White lost</h3><div class="row" id="graveWhite"></div><div class="adv" id="advWhite"></div></div>
-          <div class="grave"><h3>Black lost</h3><div class="row" id="graveBlack"></div><div class="adv" id="advBlack"></div></div>
         </div>
       </div>
 
@@ -1292,8 +1387,13 @@ function describePly(h){
 
 /* ================= rendering ================= */
 var boardEl=document.getElementById("board");
-var rankEl=document.getElementById("rankLabels");
-var fileEl=document.getElementById("fileLabels");
+var flipped=false;   // manual "Flip board", independent of the auto-rotate option
+
+/* Which way the board faces: the auto-rotate option, inverted by a manual flip. */
+function boardFlip(sideToMove){
+  var auto = rotate && sideToMove==="b";
+  return auto !== flipped;      // XOR
+}
 
 function buildBoard(){
   boardEl.innerHTML="";
@@ -1322,17 +1422,7 @@ function render(){
     ? (reviewIdx>0 ? state.history[reviewIdx-1] : null)
     : lastMove;
 
-  var flip = rotate && sideToMove==="b";
-  // labels
-  rankEl.innerHTML=""; fileEl.innerHTML="";
-  for(var k=0;k<8;k++){
-    var rk=document.createElement("span");
-    rk.textContent = flip ? (k+1) : (8-k);
-    rankEl.appendChild(rk);
-    var fl=document.createElement("span");
-    fl.textContent = flip ? FILES[7-k] : FILES[k];
-    fileEl.appendChild(fl);
-  }
+  var flip = boardFlip(sideToMove);
   var cells=boardEl.children;
   var checkColor = inCheck(board, sideToMove) ? sideToMove : null;
   var checkSq = checkColor ? kingSq(board, checkColor) : -1;
@@ -1360,6 +1450,9 @@ function render(){
     if(dragState && dragState.targets[i]) cell.classList.add("dropTarget");
     if(targetTo[i]==="move") inner+='<span class="move-dot"></span>';
     if(targetTo[i]==="cap") inner+='<span class="capture-ring"></span>';
+    // coordinates only along the two visible edges, as chess apps do
+    if(d>=56) inner+='<span class="coord file">'+FILES[c]+'</span>';
+    if(d%8===0) inner+='<span class="coord rank">'+(8-r)+'</span>';
     cell.innerHTML=inner;
 
     var mine = !reviewing() && pc && pc[0]===state.turn && !gameOver && !busy;
@@ -1370,6 +1463,9 @@ function render(){
   }
   renderStatus();
   renderGraves();
+  var rb=document.getElementById("reviewBtn");
+  rb.disabled = !(state.history.length && (gameOver || reviewing()));
+  rb.querySelector(".tTxt").textContent = reviewing() ? "Close" : "Review";
 }
 
 function renderStatus(){
@@ -1405,34 +1501,64 @@ function renderStatus(){
   }
 }
 
+/* Player cards: each side shows the pieces IT has captured and its material
+   lead, the way chess apps present it — not "what I lost", which reads backwards. */
 function renderGraves(){
   var src = reviewing() ? state.snaps[reviewIdx].graves : state.graves;
-  ["w","b"].forEach(function(col){
-    var row=document.getElementById(col==="w"?"graveWhite":"graveBlack");
-    var adv=document.getElementById(col==="w"?"advWhite":"advBlack");
-    var list=src[col].slice().sort(function(a,b){return VAL[b]-VAL[a];});
-    row.innerHTML = list.map(function(t){ return pieceSVG(col, t); }).join("");
-    var pts=list.reduce(function(s,t){return s+VAL[t];},0);
-    adv.textContent = pts ? ("−"+pts) : "";
-  });
+  var sideToMove = reviewing() ? state.snaps[reviewIdx].turn : state.turn;
+  var flip = boardFlip(sideToMove);
+  var topSide = flip ? "w" : "b";          // colour sitting at the top of the board
+  var botSide = opp(topSide);
+
+  function pts(list){ return list.reduce(function(s,t){return s+VAL[t];},0); }
+  var lead = { w: pts(src.b)-pts(src.w), b: pts(src.w)-pts(src.b) };
+
+  function fill(pos, side){
+    var taken = src[opp(side)].slice().sort(function(a,b){return VAL[b]-VAL[a];});
+    document.getElementById("av"+pos).innerHTML = pieceSVG(side,"k");
+    var label = NAME_COLOR(side);
+    var sub = botOn ? (side===botSide2() ? "computer" : "you") : "";
+    document.getElementById("name"+pos).innerHTML =
+      label + (sub ? ' <span class="sub">· '+sub+'</span>' : '');
+    document.getElementById("taken"+pos).innerHTML =
+      taken.map(function(t){ return pieceSVG(opp(side), t); }).join("");
+    document.getElementById("adv"+pos).textContent = lead[side]>0 ? ("+"+lead[side]) : "";
+    var card=document.getElementById("card"+pos);
+    card.classList.toggle("toMove", !reviewing() && !gameOver && sideToMove===side);
+  }
+  function botSide2(){ return botSide; }
+  fill("Top", topSide);
+  fill("Bottom", botSide);
 }
 
 function renderLog(){
   var el=document.getElementById("log");
   if(state.history.length===0){ el.innerHTML='<span class="empty">The game hasn’t started.</span>'; return; }
   var n=0;
-  el.innerHTML = state.history.map(function(h,ix){
-    var label = "";
-    if(!h.cont && h.color==="w"){ n++; label = n+"."; }
-    var mv = h.txt.replace(/✓/g,'<span class="ok">✓</span>').replace(/✗/g,'<span class="no">✗</span>');
-    var here = reviewing() && reviewIdx===ix+1 ? " at" : "";
-    return '<div class="entry'+here+'" data-ply="'+(ix+1)+'"><span class="n">'+label+'</span>'+
-           '<span class="side">'+(h.color==="w"?"White":"Black")+'</span>'+
-           '<span class="mv">'+mv+'</span></div>';
+  /* Group plies into numbered rows with a White and a Black column. A Gambit
+     turn can hold several plies (playing on out of check), so a row keeps
+     filling its column rather than assuming one ply per side. */
+  var rows=[], cur=null;
+  state.history.forEach(function(h,ix){
+    if(h.color==="w" && !h.cont){ n++; cur={n:n, w:[], b:[]}; rows.push(cur); }
+    if(!cur){ n++; cur={n:n, w:[], b:[]}; rows.push(cur); }
+    cur[h.color].push({ix:ix+1, txt:h.txt});
+  });
+  function cell(list){
+    if(!list.length) return '<span class="ply blank"></span>';
+    return list.map(function(p){
+      var mv=p.txt.replace(/✓/g,'<span class="ok">✓</span>').replace(/✗/g,'<span class="no">✗</span>');
+      var here = reviewing() && reviewIdx===p.ix ? " at" : "";
+      return '<span class="ply'+here+'" data-ply="'+p.ix+'">'+mv+'</span>';
+    }).join("");
+  }
+  el.innerHTML = rows.map(function(r){
+    return '<div class="moveRow"><span class="n">'+r.n+'.</span>'+
+           cell(r.w)+cell(r.b)+'</div>';
   }).join("");
   if(reviewing()){
-    var cur=el.querySelector(".entry.at");
-    if(cur) cur.scrollIntoView({block:"nearest"});
+    var at=el.querySelector(".ply.at");
+    if(at) at.scrollIntoView({block:"nearest"});
   } else {
     el.scrollTop = el.scrollHeight;
   }
@@ -1858,12 +1984,20 @@ document.getElementById("goNew").addEventListener("click", newGame);
 
 /* Clicking a move jumps to it — and opens the review if the game is over. */
 document.getElementById("log").addEventListener("click", function(e){
-  var row=e.target.closest ? e.target.closest(".entry") : null;
+  var row=e.target.closest ? e.target.closest(".ply") : null;
   if(!row) return;
   var ply=parseInt(row.dataset.ply,10);
   if(isNaN(ply)) return;
   if(reviewing()) reviewGo(ply);
   else if(gameOver) enterReview(ply);
+});
+
+document.getElementById("flipBtn").addEventListener("click", function(){
+  flipped=!flipped;
+  render();
+});
+document.getElementById("reviewBtn").addEventListener("click", function(){
+  if(reviewing()) exitReview(); else enterReview(null);
 });
 
 /* ---- review controls ---- */
@@ -1939,6 +2073,41 @@ themeBtn.addEventListener("click", function(){
   applyTheme(next);
   try{ localStorage.setItem("gambit.theme", next); }catch(e){}
 });
+
+/* ---- opening animation ---- */
+(function splashIntro(){
+  var el=document.getElementById("splash");
+  if(!el) return;
+  var closed=false;
+  function close(){
+    if(closed) return; closed=true;
+    el.classList.add("done");
+    setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 600);
+  }
+  document.getElementById("splashSkip").addEventListener("click", close);
+  el.addEventListener("click", close);
+
+  // board tiles in, square by square, on a diagonal sweep
+  var b=document.getElementById("splashBoard"), html="";
+  for(var r=0;r<8;r++) for(var c=0;c<8;c++){
+    var dark=(r+c)&1;
+    html+='<i style="background:var(--board-'+(dark?"dark":"light")+');'+
+          'animation-delay:'+((r+c)*26)+'ms"></i>';
+  }
+  b.innerHTML=html;
+
+  // the back rank drops onto it once the tiles have landed
+  var order=["r","n","b","q","k","b","n","r"], rank="";
+  for(var i=0;i<8;i++){
+    rank+=pieceSVG("w",order[i]).replace("<svg ",
+      '<svg style="animation-delay:'+(430+i*55)+'ms" ');
+  }
+  document.getElementById("splashRank").innerHTML=rank;
+
+  if(reduced){ setTimeout(close, 550); return; }   // show it, just don't animate
+  el.classList.add("animate");
+  setTimeout(close, 2150);
+})();
 
 buildBoard();
 newGame();
