@@ -195,6 +195,38 @@ Two CSS lessons, both about ordering and specificity:
   training — choosing an opponent is what the menu is for.
 - **Back button, top left**, shown only inside a game.
 
+## Tactical puzzles ✅ DONE
+
+Training now has two tabs. **Rules** keeps the five dice lessons. **Puzzles** is real
+tactics: pick Easy / Medium / Hard, the opponent plays the first move, and you find the win.
+
+- Six puzzles: back-rank mate, queen-and-bishop mate, winning the queen, Scholar's finish,
+  a forced block, and a smothered mate (queen sacrifice, then the knight).
+- **Hint** highlights the square of the piece that must move and prints a one-line clue.
+- The goal line states the target and the move count — "Mate in 2 · 2 moves" — and counts
+  down as you go. Wrong moves are rejected and the position resets.
+
+**Puzzle captures resolve without dice**, and the UI says so. A tactic that runs through a
+capture would otherwise be unsolvable whenever the roll went against you, testing luck
+instead of the idea. The rules lessons still roll for real.
+
+Every puzzle is verified against the engine rather than by eye: the opening move and each
+solution move must be legal, each scripted reply must be the opponent's *only* legal move,
+and mate puzzles must end in real checkmate (not stalemate) with the declared move count.
+Two of my first drafts failed that check and were replaced — one "win the queen" gained no
+material because the queen had already stepped off the square, and one mate-in-2's second
+move was illegal once the blocker arrived.
+
+## Hero fixes ✅ DONE
+
+- **Pips overflowed small dice.** Padding and pip size were fixed pixels tuned for the
+  64px overlay die; on the 44px menu die three 11px pips did not fit in 26px of space and
+  spilled outside the face. Now proportional (`padding:13%`, `width:66%`).
+- **The attacker vanished on a capture.** The piece was sized at 78% of a square, so
+  `translateY(-100%)` moved it only 0.78 of a square and it came to rest between two.
+  Now full-size with padding, so one `-100%` is exactly one square — measured landing
+  error is 0%.
+
 ## Phase 6 — next
 
 - **Playtest.** Does the 50/50-everything feel good, or too swingy? Tune from real games.

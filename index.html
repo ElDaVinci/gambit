@@ -159,7 +159,9 @@ body{
   width:132px;border-radius:8px;overflow:hidden;
   box-shadow:0 8px 22px -12px rgba(0,0,0,.6);flex:none}
 .heroBoard .hsq{position:relative;aspect-ratio:1;display:grid;place-items:center}
-.heroBoard .hsq svg{width:78%;height:78%;
+/* Full-size with padding, so translateY(-100%) is exactly one square. At 78%
+   the attacker only travelled 0.78 of a square and came to rest between two. */
+.heroBoard .hsq svg{width:100%;height:100%;padding:11%;box-sizing:border-box;
   transition:transform .34s cubic-bezier(.22,.68,.28,1), opacity .3s}
 .heroBoard .hsq.target::after{content:"";position:absolute;inset:8%;border-radius:50%;
   border:3px solid var(--repel);box-shadow:0 0 8px -1px var(--repel);
@@ -244,6 +246,27 @@ body{
 .tTask.done{border-left-color:var(--advance);color:var(--advance);font-weight:600}
 .tActions{display:flex;gap:8px}
 .tActions .btn{flex:1;justify-content:center}
+.tTabs{display:flex;gap:6px;margin-bottom:2px}
+.tTab{flex:1;font:inherit;font-size:12.5px;font-weight:600;color:var(--muted);
+  background:var(--surface-2);border:1px solid var(--line);border-radius:8px;
+  padding:7px;cursor:pointer}
+.tTab.on{background:var(--brass);color:#1a1710;border-color:transparent}
+.tTab:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+.pzDiff{display:flex;gap:6px;margin-bottom:8px}
+.pzLvl{flex:1;font:inherit;font-size:12px;color:var(--ink-soft);background:transparent;
+  border:1px solid var(--line);border-radius:7px;padding:6px;cursor:pointer}
+.pzLvl.on{border-color:var(--brass);color:var(--brass);font-weight:600}
+.pzLvl:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+.pzHead{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.pzGoal{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--brass);
+  font-weight:600;letter-spacing:.06em}
+.pzNote{margin:8px 0 0;font-size:11.5px;color:var(--muted);line-height:1.4}
+#rulesPane[hidden],#puzzlePane[hidden]{display:none}
+/* the square a hint points at */
+.sq.hintFrom::after{content:"";position:absolute;inset:0;z-index:2;
+  box-shadow:inset 0 0 0 4px var(--brass);border-radius:2px;
+  animation:hintPulse 1.1s ease-in-out infinite}
+@keyframes hintPulse{0%,100%{opacity:.55}50%{opacity:1}}
 
 /* ---- player cards (opponent above the board, you below) ---- */
 .playerCard{display:flex;align-items:center;gap:9px;padding:7px 10px;min-height:46px;
@@ -465,8 +488,6 @@ details.rules .body li{margin:3px 0}
   .battle .roles{margin-bottom:6px}
   .dice{gap:26px;margin:8px 0 2px}
   .dieBox{--half:26px;width:52px;height:52px}
-  .face{padding:7px}
-  .face i{width:9px;height:9px}
   .dieShadow{width:44px;top:58px}
   .dieWrap.winner .dieShadow{width:52px}
   .dieLabel{margin-top:16px}
@@ -498,13 +519,15 @@ details.rules .body li{margin:3px 0}
   border:1px solid rgba(90,80,55,.30);
   box-shadow:inset 0 0 14px rgba(120,100,60,.22);
   display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);
-  padding:9px;gap:2px;
+  /* proportional, not fixed px: the same face markup is used at 64px in the
+     battle overlay and 44px on the menu, and fixed pips overflowed the small one */
+  padding:13%;gap:3%;
   /* Hidden, not visible: the cube is hollow, so the three faces pointing away
      were showing through the front one as ghost outlines and stray pips. */
   backface-visibility:hidden;
   -webkit-backface-visibility:hidden;
 }
-.face i{width:11px;height:11px;border-radius:50%;align-self:center;justify-self:center;
+.face i{width:66%;aspect-ratio:1;border-radius:50%;align-self:center;justify-self:center;
   background:radial-gradient(circle at 34% 30%,#5d5340,#241f16);
   box-shadow:inset 0 1px 1px rgba(255,255,255,.30)}
 /* face placement — offset by the cube's half-edge, so one variable resizes it */
@@ -666,13 +689,41 @@ details.rules .body li{margin:3px 0}
       </div>
 
       <div class="trainBar" id="trainBar" hidden>
-        <span class="tStep" id="tStep">Lesson 1 of 5</span>
-        <h3 class="tTitle" id="tTitle"></h3>
-        <p class="tText" id="tText"></p>
-        <p class="tTask" id="tTask"></p>
-        <div class="tActions">
-          <button class="btn rvGhost" id="tPrev" type="button">Back</button>
-          <button class="btn primary" id="tNext" type="button">Next</button>
+        <div class="tTabs">
+          <button class="tTab on" id="tabRules" type="button">Rules</button>
+          <button class="tTab" id="tabPuzzles" type="button">Puzzles</button>
+        </div>
+
+        <div id="rulesPane">
+          <span class="tStep" id="tStep">Lesson 1 of 5</span>
+          <h3 class="tTitle" id="tTitle"></h3>
+          <p class="tText" id="tText"></p>
+          <p class="tTask" id="tTask"></p>
+          <div class="tActions">
+            <button class="btn rvGhost" id="tPrev" type="button">Back</button>
+            <button class="btn primary" id="tNext" type="button">Next</button>
+          </div>
+        </div>
+
+        <div id="puzzlePane" hidden>
+          <div class="pzDiff" role="group" aria-label="Puzzle difficulty">
+            <button class="pzLvl on" data-lvl="easy"   type="button">Easy</button>
+            <button class="pzLvl"    data-lvl="medium" type="button">Medium</button>
+            <button class="pzLvl"    data-lvl="hard"   type="button">Hard</button>
+          </div>
+          <div class="pzHead">
+            <span class="tStep" id="pzStep">Puzzle 1 of 3</span>
+            <span class="pzGoal" id="pzGoal">Mate in 1</span>
+          </div>
+          <h3 class="tTitle" id="pzTheme"></h3>
+          <p class="tTask" id="pzStatus"></p>
+          <div class="tActions">
+            <button class="btn rvGhost" id="pzHint" type="button">Hint</button>
+            <button class="btn rvGhost" id="pzRetry" type="button">Retry</button>
+            <button class="btn primary" id="pzNext" type="button">Next</button>
+          </div>
+          <p class="pzNote">Puzzles resolve captures without dice, so the tactic is the
+            only thing being tested.</p>
         </div>
       </div>
 
@@ -1426,6 +1477,11 @@ function commit(mv){
     finalize(mv, true, null);
     return;
   }
+  /* Puzzles are about the tactic, so captures there resolve without the dice —
+     otherwise a solution that runs through a capture is unsolvable whenever the
+     roll goes against you, which tests luck instead of the idea. */
+  if(puzzleActive){ finalize(mv, true, null); return; }
+
   var defSq = mv.ep ? idx(rowOf(mv.from),colOf(mv.to)) : mv.to;
   var defPc = b[defSq], defType=defPc[1], defColor=defPc[0];
   render();
@@ -1645,6 +1701,7 @@ function render(){
     if(i===checkSq) cell.classList.add("check");
     if(dragState && dragState.from===i) cell.classList.add("dragSource");
     if(dragState && dragState.targets[i]) cell.classList.add("dropTarget");
+    if(hintSq===i) cell.classList.add("hintFrom");
     if(targetTo[i]==="move") inner+='<span class="move-dot"></span>';
     if(targetTo[i]==="cap") inner+='<span class="capture-ring"></span>';
     // coordinates only along the two visible edges, as chess apps do
@@ -1929,6 +1986,8 @@ function chooseBotMove(st, levelKey){
 var botOn=false, botSide="b", botLevel="medium", thinking=false;
 
 function maybeBot(){
+  /* Puzzles script the opponent's replies, so the search must stay out of it. */
+  if(puzzleActive) return;
   if(!botOn || gameOver || busy || thinking) return;
   if(state.turn !== botSide) return;
   thinking=true; busy=true;
@@ -2220,7 +2279,62 @@ var LESSONS=[
   }
 ];
 
+/* ================= tactical puzzles =================
+   Real positions. The opponent plays first, then the player has to find the
+   win. Captures resolve without dice here (see commit): a solution that hinges
+   on a capture would otherwise be unsolvable whenever the roll went against
+   you, which tests luck rather than the tactic. */
+function sqi(name){ return "abcdefgh".indexOf(name[0]) + (8-parseInt(name[1],10))*8; }
+function pm(from,to){ return {from:sqi(from), to:sqi(to)}; }   /* puzzle move spec */
+
+var PUZZLES={
+  easy:[
+    { theme:"Back-rank mate", goal:"Mate in 1", moves:1,
+      hint:"The eighth rank is undefended.",
+      board:fromLayout(["......k.",".p...ppp","........","........",
+                        "........","........","........","...R..K."]),
+      first:pm("b7","b6"), solution:[pm("d1","d8")], replies:[] },
+    { theme:"Queen and bishop", goal:"Mate in 1", moves:1,
+      hint:"The bishop already guards the square you want.",
+      board:fromLayout(["r.....k.",".....ppp","........","........",
+                        "........","..Q.....",".B....K.","........"]),
+      first:pm("a8","a7"), solution:[pm("c3","g7")], replies:[] },
+    { theme:"Win the queen", goal:"Win material", moves:1,
+      hint:"The knight can reach the square the queen just stepped onto.",
+      board:fromLayout(["...q..k.","........","........","...N....",
+                        "........","........","........","......K."]),
+      first:pm("d8","e7"), solution:[pm("d5","e7")], replies:[] }
+  ],
+  medium:[
+    { theme:"Scholar's finish", goal:"Mate in 2", moves:2,
+      hint:"Give check on f7 — the bishop defends the queen there.",
+      board:fromLayout([".n....k.",".....ppp","........",".......Q",
+                        "..B.....","........","........","......K."]),
+      first:pm("b8","c6"), solution:[pm("h5","f7"), pm("f7","f8")],
+      replies:[pm("g8","h8")] },
+    { theme:"Forced block", goal:"Mate in 2", moves:2,
+      hint:"Check on the eighth rank — only one piece can interpose.",
+      board:fromLayout(["..b...k.",".....ppp","........","........",
+                        "........","........","........","R.....K."]),
+      first:pm("c8","e6"), solution:[pm("a1","a8"), pm("a8","c8")],
+      replies:[pm("e6","c8")] }
+  ],
+  hard:[
+    { theme:"Smothered mate", goal:"Mate in 2", moves:2,
+      hint:"Offer the queen on g8 — the rook must take it.",
+      board:fromLayout([".....r.k","p.....pp",".......N","........",
+                        "........",".Q......","........","......K."]),
+      first:pm("a7","a6"), solution:[pm("b3","g8"), pm("h6","f7")],
+      replies:[pm("f8","g8")] }
+  ]
+};
+
 var training=false, lessonIdx=0, lessonDone=false;
+var trainTab="rules";
+var puzzleLvl="easy", puzzleIdx=0, puzzleStep=0;
+var puzzleActive=false, puzzleState="", hintSq=-1;
+function puzzleList(){ return PUZZLES[puzzleLvl]||[]; }
+function currentPuzzle(){ return puzzleList()[puzzleIdx]; }
 
 function startTraining(){
   training=true; lessonIdx=0;
@@ -2231,10 +2345,10 @@ function startTraining(){
   document.getElementById("botToggle").checked=true;
   document.getElementById("opponentBox").hidden=true;
   document.getElementById("trainBar").hidden=false;
-  loadLesson(0);
+  setTrainTab("rules");
 }
 function stopTraining(){
-  training=false; lessonDone=false;
+  training=false; lessonDone=false; puzzleActive=false; hintSq=-1;
   document.getElementById("trainBar").hidden=true;
   document.getElementById("opponentBox").hidden=false;
 }
@@ -2267,8 +2381,104 @@ function renderLesson(){
   var next=document.getElementById("tNext");
   next.textContent = lessonIdx===LESSONS.length-1 ? "Finish" : (lessonDone ? "Next lesson" : "Skip");
 }
+/* ---- puzzle flow ---- */
+function loadPuzzle(i){
+  var list=puzzleList();
+  if(!list.length) return;
+  puzzleIdx=Math.max(0, Math.min(list.length-1, i));
+  var P=list[puzzleIdx];
+  puzzleStep=0; puzzleState="opening"; hintSq=-1;
+  newGame(true);
+  state.board=P.board.slice();
+  state.turn = "b";                      // the opponent moves first
+  state.castling={wK:false,wQ:false,bK:false,bQ:false};
+  state.ep=null;
+  state.snaps=[{board:state.board.slice(), turn:state.turn, graves:{w:[],b:[]}}];
+  state.posCounts={}; state.posCounts[posKey(state)]=1;
+  legalCache=legalMoves(state,"b");
+  busy=true;                             // the player waits for the opening move
+  renderPuzzle(); render(); renderLog();
+  setTimeout(function(){
+    if(!puzzleActive || puzzleState!=="opening") return;
+    var m=matchMove(P.first, "b");
+    if(m){ busy=false; commit(m); }
+    else { busy=false; puzzleState="solving"; renderPuzzle(); render(); }
+  }, 900);
+}
+/* Find the legal move object matching a scripted from/to. */
+function matchMove(spec, color){
+  var ms=legalMoves(state, color);
+  for(var i=0;i<ms.length;i++){
+    if(ms[i].from===spec.from && ms[i].to===spec.to && (!ms[i].promo || ms[i].promo==="q")) return ms[i];
+  }
+  return null;
+}
+function renderPuzzle(){
+  var list=puzzleList(), P=list[puzzleIdx];
+  if(!P) return;
+  document.getElementById("pzStep").textContent="Puzzle "+(puzzleIdx+1)+" of "+list.length;
+  document.getElementById("pzGoal").textContent=P.goal+" · "+P.moves+" move"+(P.moves>1?"s":"");
+  document.getElementById("pzTheme").textContent=P.theme;
+  var s=document.getElementById("pzStatus");
+  var msg, cls="tTask";
+  if(puzzleState==="opening") msg="Watch — the opponent moves first.";
+  else if(puzzleState==="solved"){ msg="Solved. "+P.theme+"."; cls+=" done"; }
+  else if(puzzleState==="wrong") msg="Not the move. Resetting so you can try again.";
+  else {
+    var left=P.solution.length-puzzleStep;
+    msg="Your move. "+(left===P.solution.length
+        ? ("Find the win in "+P.moves+" move"+(P.moves>1?"s":"")+".")
+        : (left+" move"+(left>1?"s":"")+" to go."));
+  }
+  s.className=cls; s.textContent=msg;
+  document.getElementById("pzHint").disabled = puzzleState!=="solving";
+  document.getElementById("pzNext").disabled = list.length<2 && puzzleState!=="solved";
+  document.getElementById("pzNext").textContent = puzzleState==="solved" ? "Next puzzle" : "Skip";
+}
+/* Judge the player's move against the solution, then play the scripted reply. */
+function checkPuzzle(h){
+  if(!puzzleActive) return;
+  var P=currentPuzzle(); if(!P) return;
+
+  if(puzzleState==="opening"){                 // that was the opponent's opening move
+    puzzleState="solving"; hintSq=-1;
+    renderPuzzle(); render();
+    return;
+  }
+  if(puzzleState!=="solving") return;
+  if(h.color!=="w") return;                    // only judge the player's moves
+
+  var want=P.solution[puzzleStep];
+  if(!want || h.from!==want.from || h.to!==want.to){
+    puzzleState="wrong"; hintSq=-1;
+    renderPuzzle(); render();
+    setTimeout(function(){ if(puzzleActive) loadPuzzle(puzzleIdx); }, 1500);
+    return;
+  }
+  puzzleStep++; hintSq=-1;
+  if(puzzleStep>=P.solution.length){
+    puzzleState="solved";
+    renderPuzzle(); render();
+    sndEnd(true);
+    return;
+  }
+  // opponent's scripted answer
+  var reply=P.replies[puzzleStep-1];
+  renderPuzzle(); render();
+  if(reply){
+    busy=true; render();
+    setTimeout(function(){
+      if(!puzzleActive) return;
+      var m=matchMove(reply, state.turn);
+      busy=false;
+      if(m) commit(m); else { renderPuzzle(); render(); }
+    }, 800);
+  }
+}
+
 /* Called after every ply while training, to see if the lesson's task is met. */
 function checkLesson(h){
+  if(puzzleActive){ checkPuzzle(h); return; }
   if(!training || lessonDone) return;
   var L=LESSONS[lessonIdx];
   var ok=false;
@@ -2388,14 +2598,13 @@ function runHeroScene(){
     var sqs=document.querySelectorAll("#heroBoard .hsq");
     var defSq=sqs[1], atkSq=sqs[4];
     defSq.classList.add("resolved");
+    var moving=atkSq.querySelector("svg"), dying=defSq.querySelector("svg");
     if(win){
-      var moving=atkSq.querySelector("svg");
-      if(moving) moving.style.transform="translateY(-100%)";      // steps onto the square
-      var dying=defSq.querySelector("svg");
       if(dying) dying.classList.add("falls");
+      // the attacker steps up onto the square it just won
+      if(moving){ moving.style.zIndex="2"; moving.style.transform="translateY(-100%)"; }
     } else {
-      var lost=atkSq.querySelector("svg");
-      if(lost) lost.classList.add("falls");                        // the attacker dies
+      if(moving) moving.classList.add("falls");                    // the attacker dies
     }
   }, settle);
 }
@@ -2440,6 +2649,9 @@ function endGame(result, why){
   selected=null;
   endDrag();
   render();
+  /* In a puzzle the mate IS the solution — the panel telling you the game is
+     over would just cover the panel telling you that you solved it. */
+  if(puzzleActive) return;
   sndEnd(result==="Checkmate");
   document.getElementById("goResult").textContent=result;
   document.getElementById("goWhy").textContent=why;
@@ -2492,6 +2704,43 @@ document.getElementById("tPrev").addEventListener("click", function(){ loadLesso
 document.getElementById("tNext").addEventListener("click", function(){
   if(lessonIdx===LESSONS.length-1){ showMenu(); return; }
   loadLesson(lessonIdx+1);
+});
+
+function setTrainTab(tab){
+  trainTab=tab;
+  var rules=tab==="rules";
+  document.getElementById("tabRules").classList.toggle("on", rules);
+  document.getElementById("tabPuzzles").classList.toggle("on", !rules);
+  document.getElementById("rulesPane").hidden=!rules;
+  document.getElementById("puzzlePane").hidden=rules;
+  puzzleActive=!rules;
+  hintSq=-1;
+  if(rules){ loadLesson(lessonIdx); }
+  else { loadPuzzle(0); }
+}
+document.getElementById("tabRules").addEventListener("click", function(){ setTrainTab("rules"); });
+document.getElementById("tabPuzzles").addEventListener("click", function(){ setTrainTab("puzzles"); });
+document.querySelectorAll(".pzLvl").forEach(function(b){
+  b.addEventListener("click", function(){
+    document.querySelectorAll(".pzLvl").forEach(function(x){ x.classList.remove("on"); });
+    this.classList.add("on");
+    puzzleLvl=this.dataset.lvl;
+    loadPuzzle(0);
+  });
+});
+document.getElementById("pzHint").addEventListener("click", function(){
+  var P=currentPuzzle();
+  if(!P || puzzleState!=="solving") return;
+  var want=P.solution[puzzleStep];
+  if(!want) return;
+  hintSq=want.from;                       // light up the piece that must move
+  document.getElementById("pzStatus").textContent=P.hint;
+  render();
+});
+document.getElementById("pzRetry").addEventListener("click", function(){ loadPuzzle(puzzleIdx); });
+document.getElementById("pzNext").addEventListener("click", function(){
+  var list=puzzleList();
+  loadPuzzle((puzzleIdx+1) % list.length);
 });
 
 document.getElementById("flipBtn").addEventListener("click", function(){
@@ -2632,6 +2881,7 @@ window.__G={freshState:freshState,legalMoves:legalMoves,applyMove:applyMove,opp:
             winChance:winChance,captureOdds:captureOdds,atkDice:atkDice,defDice:defDice,
             describePly:describePly,enterReview:enterReview,getState:function(){return state;},
             runHeroScene:function(){return runHeroScene();},reducedMotion:function(){return reduced;},
+            PUZZLES:PUZZLES,sqi:sqi,
             audioInfo:function(){return {ctx:actx,master:master,ready:audioReady,
                                          state:actx?actx.state:"none"};},
             snd:{move:sndMove,capture:sndCapture,repel:sndRepel,die:sndDie,
