@@ -234,6 +234,25 @@ body{
 .tTask.done{border-left-color:var(--advance);color:var(--advance);font-weight:600}
 .tActions{display:flex;gap:8px}
 .tActions .btn{flex:1;justify-content:center}
+/* coach prompt above the board — turn, one bold line, one plain line */
+.coach{display:flex;gap:11px;align-items:flex-start}
+.coachChip{width:22px;height:22px;flex:none;border-radius:6px;border:1px solid var(--line);
+  margin-top:1px}
+.coachChip.w{background:var(--piece-white)}
+.coachChip.b{background:var(--piece-black)}
+.coachBody{min-width:0}
+.coachTitle{margin:0;font-weight:600;font-size:15px}
+.coachText{margin:3px 0 0;font-size:13.5px;color:var(--ink-soft);line-height:1.45;
+  text-wrap:balance}
+.coachText.done{color:var(--advance);font-weight:600}
+.coachText.miss{color:var(--repel)}
+.coachMeta{margin:5px 0 0;font-family:"IBM Plex Mono",monospace;font-size:11px;
+  color:var(--muted);letter-spacing:.04em}
+.setGroup{margin:4px 0 0;font-size:11px;font-weight:600;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--muted)}
+.trainSettings{display:flex;flex-direction:column;gap:8px}
+.trainSettings[hidden]{display:none}
+#setGroupGame[hidden]{display:none}
 .tTabs{display:flex;gap:6px;margin-bottom:2px}
 .tTab{flex:1;font:inherit;font-size:12.5px;font-weight:600;color:var(--muted);
   background:var(--surface-2);border:1px solid var(--line);border-radius:8px;
@@ -622,6 +641,21 @@ details.rules .body li{margin:3px 0}
         <button class="rbtn" id="settingsClose" type="button" aria-label="Close">&times;</button>
       </div>
       <div class="controls">
+        <div class="trainSettings" id="trainSettings" hidden>
+          <p class="setGroup">Training</p>
+          <div class="tTabs">
+            <button class="tTab" id="tabRules" type="button">Rules</button>
+            <button class="tTab on" id="tabPuzzles" type="button">Puzzles</button>
+          </div>
+          <div class="pzDiff" id="pzDiffRow" role="group" aria-label="Puzzle difficulty">
+            <button class="pzLvl on" data-lvl="easy"   type="button">Easy</button>
+            <button class="pzLvl"    data-lvl="medium" type="button">Medium</button>
+            <button class="pzLvl"    data-lvl="hard"   type="button">Hard</button>
+          </div>
+          <p class="pzNote" id="pzNote">The dice apply here too &mdash; find the right move,
+            then win the roll. Lose it and the puzzle simply starts again.</p>
+        </div>
+        <p class="setGroup" id="setGroupGame">Game</p>
         <label class="switch"><span>Dark theme</span>
           <input type="checkbox" id="themeToggle"><span class="track"></span></label>
         <div class="opponentBox" id="opponentBox">
@@ -717,31 +751,15 @@ details.rules .body li{margin:3px 0}
     <section class="board-wrap" aria-label="Chess board">
       <!-- Training prompt sits ABOVE the board. It used to live under it, which
            put it 500px off-screen on a phone — nobody ever found the tabs. -->
+      <!-- Just the prompt. Mode and difficulty live behind the gear. -->
       <div class="trainBar" id="trainBar" hidden>
-        <div class="tTabs">
-          <button class="tTab on" id="tabRules" type="button">Rules</button>
-          <button class="tTab" id="tabPuzzles" type="button">Puzzles</button>
-        </div>
-
-        <div id="rulesPane">
-          <span class="tStep" id="tStep">Lesson 1 of 5</span>
-          <h3 class="tTitle" id="tTitle"></h3>
-          <p class="tText" id="tText"></p>
-          <p class="tTask" id="tTask"></p>
-        </div>
-
-        <div id="puzzlePane" hidden>
-          <div class="pzDiff" role="group" aria-label="Puzzle difficulty">
-            <button class="pzLvl on" data-lvl="easy"   type="button">Easy</button>
-            <button class="pzLvl"    data-lvl="medium" type="button">Medium</button>
-            <button class="pzLvl"    data-lvl="hard"   type="button">Hard</button>
+        <div class="coach">
+          <span class="coachChip" id="coachChip"></span>
+          <div class="coachBody">
+            <p class="coachTitle" id="coachTitle">White to move</p>
+            <p class="coachText" id="coachText"></p>
+            <p class="coachMeta" id="coachMeta"></p>
           </div>
-          <div class="pzHead">
-            <span class="tStep" id="pzStep">Puzzle 1 of 3</span>
-            <span class="pzGoal" id="pzGoal">Mate in 1</span>
-          </div>
-          <h3 class="tTitle" id="pzTheme"></h3>
-          <p class="tTask" id="pzStatus"></p>
         </div>
       </div>
 
@@ -773,8 +791,6 @@ details.rules .body li{margin:3px 0}
           <button class="btn rvGhost" id="pzRetry" type="button">Retry</button>
           <button class="btn primary" id="pzNext" type="button">Next</button>
         </div>
-        <p class="pzNote" id="pzNote" hidden>The dice apply here too &mdash; find the right
-          move, then win the roll. Lose it and the puzzle simply starts again.</p>
       </div>
 
       <div class="boardTools">
@@ -2391,12 +2407,13 @@ function loadLesson(i){
 }
 function renderLesson(){
   var L=LESSONS[lessonIdx];
-  document.getElementById("tStep").textContent="Lesson "+(lessonIdx+1)+" of "+LESSONS.length;
-  document.getElementById("tTitle").textContent=L.title;
-  document.getElementById("tText").textContent=L.text;
-  var t=document.getElementById("tTask");
-  t.textContent = lessonDone ? "Done — nicely played." : L.task;
-  t.classList.toggle("done", lessonDone);
+  document.getElementById("coachChip").className="coachChip w";
+  document.getElementById("coachTitle").textContent=L.title;
+  var t=document.getElementById("coachText");
+  t.className = "coachText" + (lessonDone ? " done" : "");
+  t.textContent = lessonDone ? "Done — nicely played." : (L.text+"  "+L.task);
+  document.getElementById("coachMeta").textContent =
+    "Lesson "+(lessonIdx+1)+" of "+LESSONS.length;
   document.getElementById("tPrev").disabled = lessonIdx===0;
   var next=document.getElementById("tNext");
   next.textContent = lessonIdx===LESSONS.length-1 ? "Finish" : (lessonDone ? "Next lesson" : "Skip");
@@ -2436,25 +2453,33 @@ function matchMove(spec, color){
 function renderPuzzle(){
   var list=puzzleList(), P=list[puzzleIdx];
   if(!P) return;
-  document.getElementById("pzStep").textContent="Puzzle "+(puzzleIdx+1)+" of "+list.length;
-  document.getElementById("pzGoal").textContent=P.goal+" · "+P.moves+" move"+(P.moves>1?"s":"");
-  document.getElementById("pzTheme").textContent=P.theme;
-  var s=document.getElementById("pzStatus");
-  var msg, cls="tTask";
-  if(puzzleState==="opening") msg="Watch — the opponent moves first.";
-  else if(puzzleState==="solved"){ msg="Solved. "+P.theme+"."; cls+=" done"; }
-  else if(puzzleState==="wrong") msg="Not the move. Resetting so you can try again.";
-  else if(puzzleState==="unlucky") msg="Right idea — but the dice went against you. Going again.";
+  var chip=document.getElementById("coachChip");
+  var title=document.getElementById("coachTitle");
+  var text=document.getElementById("coachText");
+  var meta=document.getElementById("coachMeta");
+
+  chip.className = "coachChip " + (puzzleState==="opening" ? "b" : "w");
+  var msg, cls="coachText";
+  if(puzzleState==="opening"){ title.textContent="Black to move";
+    msg="Watch — the opponent plays first."; }
+  else if(puzzleState==="solved"){ title.textContent="Solved";
+    msg=P.theme+". Well found."; cls+=" done"; }
+  else if(puzzleState==="wrong"){ title.textContent="Not the move";
+    msg="Resetting so you can try again."; cls+=" miss"; }
+  else if(puzzleState==="unlucky"){ title.textContent="The dice said no";
+    msg="Right idea — but you lost the roll. Going again."; cls+=" miss"; }
   else {
+    title.textContent="White to move";
     var left=P.solution.length-puzzleStep;
-    msg="Your move. "+(left===P.solution.length
-        ? ("Find the win in "+P.moves+" move"+(P.moves>1?"s":"")+".")
-        : (left+" move"+(left>1?"s":"")+" to go."));
+    msg = (left===P.solution.length)
+      ? ("You can win here. Find the "+P.goal.toLowerCase()+".")
+      : (left+" move"+(left>1?"s":"")+" to go.");
   }
-  s.className=cls; s.textContent=msg;
+  text.className=cls; text.textContent=msg;
+  meta.textContent = P.theme+" · "+P.goal+" · Puzzle "+(puzzleIdx+1)+" of "+list.length;
+
   document.getElementById("pzHint").disabled = puzzleState!=="solving";
-  document.getElementById("pzNext").disabled = list.length<2 && puzzleState!=="solved";
-  document.getElementById("pzNext").textContent = puzzleState==="solved" ? "Next puzzle" : "Skip";
+  document.getElementById("pzNext").textContent = puzzleState==="solved" ? "Next" : "Skip";
 }
 /* Judge the player's move against the solution, then play the scripted reply. */
 function checkPuzzle(h){
@@ -2750,10 +2775,9 @@ function setTrainTab(tab){
   var rules=tab==="rules";
   document.getElementById("tabRules").classList.toggle("on", rules);
   document.getElementById("tabPuzzles").classList.toggle("on", !rules);
-  document.getElementById("rulesPane").hidden=!rules;
-  document.getElementById("puzzlePane").hidden=rules;
   document.getElementById("rulesActions").hidden=!rules;
   document.getElementById("puzzleActionsRow").hidden=rules;
+  document.getElementById("pzDiffRow").hidden=rules;      // difficulty is puzzles-only
   document.getElementById("pzNote").hidden=rules;
   puzzleActive=!rules;
   hintSq=-1;
@@ -2776,7 +2800,7 @@ document.getElementById("pzHint").addEventListener("click", function(){
   var want=P.solution[puzzleStep];
   if(!want) return;
   hintSq=want.from;                       // light up the piece that must move
-  document.getElementById("pzStatus").textContent=P.hint;
+  document.getElementById("coachText").textContent=P.hint;
   render();
 });
 document.getElementById("pzRetry").addEventListener("click", function(){ loadPuzzle(puzzleIdx); });
@@ -2872,6 +2896,9 @@ function openSettings(){
   /* Rotating the board makes no sense in training: it is always you as White
      against the computer, and a puzzle would flip mid-solve. */
   document.getElementById("rotateRow").hidden = training;
+  document.getElementById("opponentBox").hidden = training;
+  document.getElementById("trainSettings").hidden = !training;
+  document.getElementById("setGroupGame").hidden = training;
   settingsEl.hidden=false;
 }
 function closeSettings(){ settingsEl.hidden=true; }

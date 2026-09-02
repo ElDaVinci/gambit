@@ -7,7 +7,7 @@
  *   - other assets -> cache-first, since icons and the manifest rarely change
  *                     and this keeps launches instant.
  */
-const CACHE = "gambit-v14";
+const CACHE = "gambit-v15";
 
 const ASSETS = [
   "./",
