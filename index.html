@@ -122,7 +122,7 @@ body{
   box-shadow:var(--shadow)}
 .backBtn:hover{color:var(--brass);border-color:var(--brass)}
 .backBtn:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
-.backBtn[hidden]{display:none}
+.backBtn[hidden],.gearBtn[hidden]{display:none}
 .wordmark{font-family:"Zilla Slab",Georgia,serif;font-weight:700;font-size:26px;letter-spacing:.01em;margin:0;line-height:1}
 .wordmark .die{color:var(--brass)}
 .tagline{color:var(--muted);font-size:13.5px;margin:0}
@@ -2437,12 +2437,78 @@ function renderLesson(){
   next.textContent = lessonIdx===LESSONS.length-1 ? "Finish" : (lessonDone ? "Next lesson" : "Skip");
 }
 /* ---- puzzle flow ---- */
+var puzzleGrade=null, lastGrade=null;
+function isMateGoal(P){ return P.goal.indexOf("Mate")===0; }
+
+/* Score the move the player actually made against the puzzle's move, using the
+   same search the computer opponent uses, and describe the gap the way a chess
+   trainer would rather than just saying "wrong". */
+function gradeMove(h, want){
+  try{
+    var prev=state.snaps[state.snaps.length-2];       // position before this ply
+    if(!prev) return {label:"Not the move", note:"Try again."};
+    var st={board:prev.board.slice(), turn:prev.turn,
+            castling:{wK:false,wQ:false,bK:false,bQ:false}, ep:null, halfmove:0};
+    var ms=legalMoves(st, st.turn);
+    function pick(f,t){ return ms.filter(function(m){return m.from===f&&m.to===t;})[0]; }
+    var mPlayed=pick(h.from,h.to), mBest=pick(want.from,want.to);
+    if(!mPlayed||!mBest) return {label:"Not the move", note:"Try again."};
+
+    /* Same depth for the played move and for every alternative, or the two are
+       not comparable and an ordinary developing move looks far worse than it is. */
+    var GRADE_DEPTH=2;
+    nodes=0; nodeBudget=400000;
+    var vPlayed=moveValue(st, mPlayed, GRADE_DEPTH, -Infinity, Infinity);
+
+    /* Against a forced mate every other move scores about -100000, so grading
+       off the solution alone calls a sensible developing move a blunder. Judge
+       the move against the best ALTERNATIVE instead, and report the missed mate
+       separately. */
+    var vAlt=-Infinity;
+    for(var i=0;i<ms.length;i++){
+      if(ms[i].from===mBest.from && ms[i].to===mBest.to) continue;
+      var v=moveValue(st, ms[i], GRADE_DEPTH, -Infinity, Infinity);
+      if(v>vAlt) vAlt=v;
+    }
+    if(vAlt===-Infinity) vAlt=vPlayed;
+    var gap=vAlt-vPlayed;                     // how far below the best alternative
+
+    /* Ask the board, not the score. A mating capture is a chance node, so its
+       expected value is only ~69% of the mate score and never clears MATE. */
+    function matesAfter(m){
+      var res=applyMove(st, m, true);
+      var nxt={board:res.board, turn:opp(st.turn), castling:res.castling,
+               ep:res.ep, halfmove:0};
+      return legalMoves(nxt, nxt.turn).length===0 && inCheck(nxt.board, nxt.turn);
+    }
+    var mateWasThere = matesAfter(mBest);
+    lastGrade={gap:Math.round(gap), vPlayed:Math.round(vPlayed),
+               vAlt:Math.round(vAlt), mate:mateWasThere, moves:ms.length};
+
+    /* Bands measured against real tries in these positions: sound moves such as
+       Nc3, Bxf7+ and a3 score 183-233 below the best alternative, while hanging
+       the queen scores 363. The dice compress every value, so the thresholds sit
+       tighter than a plain chess engine's would. */
+    if(mateWasThere){
+      if(gap<260) return {label:"Missed the mate",
+        note:"A perfectly sound move — but there is forced mate in this position."};
+      if(gap<340) return {label:"Missed the mate",
+        note:"There was forced mate here, and this concedes ground as well."};
+      return {label:"Blunder",
+        note:"This drops material, and mate was available. Look again."};
+    }
+    if(gap<80)   return {label:"Almost", note:"A reasonable move, but there is something stronger."};
+    if(gap<260)  return {label:"Inaccuracy", note:"Playable, yet it lets the win slip away."};
+    if(gap<340)  return {label:"Mistake", note:"That misses the point of the position."};
+    return {label:"Blunder", note:"That gives material away. Look again."};
+  }catch(e){ return {label:"Not the move", note:"Try again."}; }
+}
 function loadPuzzle(i){
   var list=puzzleList();
   if(!list.length) return;
   puzzleIdx=Math.max(0, Math.min(list.length-1, i));
   var P=list[puzzleIdx];
-  puzzleStep=0; puzzleState="opening"; hintSq=-1;
+  puzzleStep=0; puzzleState="opening"; hintSq=-1; puzzleGrade=null;
   newGame(true);
   state.board=P.board.slice();
   state.turn = "b";                      // the opponent moves first
@@ -2482,8 +2548,10 @@ function renderPuzzle(){
     msg="Watch — the opponent plays first."; }
   else if(puzzleState==="solved"){ title.textContent="Solved";
     msg=P.theme+". Well found."; cls+=" done"; }
-  else if(puzzleState==="wrong"){ title.textContent="Not the move";
-    msg="Resetting so you can try again."; cls+=" miss"; }
+  else if(puzzleState==="wrong"){
+    title.textContent = puzzleGrade ? puzzleGrade.label : "Not the move";
+    msg = puzzleGrade ? puzzleGrade.note : "Try again.";
+    cls+=" miss"; }
   else if(puzzleState==="unlucky"){ title.textContent="The dice said no";
     msg="Right idea — but you lost the roll. Going again."; cls+=" miss"; }
   else {
@@ -2523,9 +2591,18 @@ function checkPuzzle(h){
 
   var want=P.solution[puzzleStep];
   if(!want || h.from!==want.from || h.to!==want.to){
+    /* Real puzzle trainers accept any move that achieves the goal, and tell you
+       HOW wrong a wrong one was rather than just rejecting it. */
+    if(isMateGoal(P) && puzzleStep===P.solution.length-1 &&
+       legalMoves(state, state.turn).length===0 && inCheck(state.board, state.turn)){
+      puzzleStep++; hintSq=-1; puzzleState="solved";
+      renderPuzzle(); render(); sndEnd(true);
+      return;
+    }
+    puzzleGrade = gradeMove(h, want);
     puzzleState="wrong"; hintSq=-1;
     renderPuzzle(); render();
-    setTimeout(function(){ if(puzzleActive) loadPuzzle(puzzleIdx); }, 1500);
+    setTimeout(function(){ if(puzzleActive) loadPuzzle(puzzleIdx); }, 2200);
     return;
   }
   /* Right move, wrong roll. The dice are live in puzzles too, so a correct
@@ -2592,27 +2669,34 @@ function buildMenuArt(){
 
 /* The 3×3 board keeps its nine squares; only the two pieces on it change.
    Attacker sits in the middle, defender directly above it. */
+/* Each scene names the squares it uses, because the capture has to be a move
+   the piece can actually make. Squares are indices on the 3x3:
+       0 1 2
+       3 4 5
+       6 7 8
+   A knight cannot reach a square one step in front of it, so it needs an
+   L-shape; a pawn captures diagonally, never straight ahead. Verified against
+   the real move generator (see __G.checkHeroScenes). */
 var HERO_SCENES=[
-  {atk:["w","n"], def:["b","p"]},
-  {atk:["b","r"], def:["w","b"]},
-  {atk:["w","q"], def:["b","r"]},   // the Queen brings a second die
-  {atk:["w","p"], def:["b","n"]},
-  {atk:["b","q"], def:["w","n"]},
-  {atk:["w","r"], def:["b","b"]}
+  {atk:["w","n"], def:["b","p"], from:7, to:2},   // knight: L-shape
+  {atk:["b","r"], def:["w","b"], from:1, to:7},   // rook: down the file
+  {atk:["w","q"], def:["b","r"], from:6, to:2},   // queen: long diagonal, two dice
+  {atk:["w","p"], def:["b","n"], from:7, to:5},   // pawn: diagonal capture only
+  {atk:["b","b"], def:["w","n"], from:0, to:8},   // bishop: corner to corner
+  {atk:["w","r"], def:["b","b"], from:3, to:5}    // rook: across the rank
 ];
 var heroTimer=null, heroScene=0, heroForceWin=true, heroSpins=0;
 
 function heroSquares(scene){
-  var hb=document.getElementById("heroBoard");
-  var cells=[
-    {d:0}, {d:1, pc:scene.def, target:true}, {d:0},
-    {d:1}, {d:0, pc:scene.atk},              {d:1},
-    {d:0}, {d:1},                            {d:0}
-  ];
-  hb.innerHTML = cells.map(function(c){
-    return '<div class="hsq'+(c.target?" target":"")+'" style="background:var(--board-'+
-           (c.d?"dark":"light")+')">'+(c.pc?pieceSVG(c.pc[0],c.pc[1]):"")+'</div>';
-  }).join("");
+  var hb=document.getElementById("heroBoard"), html="";
+  for(var i=0;i<9;i++){
+    var r=Math.floor(i/3), c=i%3, dark=(r+c)&1;
+    var pc = (i===scene.from) ? scene.atk : (i===scene.to ? scene.def : null);
+    html+='<div class="hsq'+(i===scene.to?" target":"")+
+          '" style="background:var(--board-'+(dark?"dark":"light")+')">'+
+          (pc?pieceSVG(pc[0],pc[1]):"")+'</div>';
+  }
+  hb.innerHTML=html;
 }
 
 function heroBuildDice(host, n){
@@ -2677,13 +2761,18 @@ function runHeroScene(){
 
     // play the result out on the little board
     var sqs=document.querySelectorAll("#heroBoard .hsq");
-    var defSq=sqs[1], atkSq=sqs[4];
+    var defSq=sqs[scene.to], atkSq=sqs[scene.from];
     defSq.classList.add("resolved");
     var moving=atkSq.querySelector("svg"), dying=defSq.querySelector("svg");
     if(win){
       if(dying) dying.classList.add("falls");
-      // the attacker steps up onto the square it just won
-      if(moving){ moving.style.zIndex="2"; moving.style.transform="translateY(-100%)"; }
+      // travel the real distance of the move, not a fixed step
+      var dCol=(scene.to%3)-(scene.from%3);
+      var dRow=Math.floor(scene.to/3)-Math.floor(scene.from/3);
+      if(moving){
+        moving.style.zIndex="2";
+        moving.style.transform="translate("+(dCol*100)+"%,"+(dRow*100)+"%)";
+      }
     } else {
       if(moving) moving.classList.add("falls");                    // the attacker dies
     }
@@ -2700,6 +2789,8 @@ function showMenu(){
   document.getElementById("gameView").hidden=true;
   document.getElementById("tagline").hidden=false;
   document.getElementById("backBtn").hidden=true;
+  document.getElementById("gearBtn").hidden=true;   // nothing to configure on the menu
+  document.getElementById("settings").hidden=true;
   startHeroLoop();
 }
 function showGame(){
@@ -2707,6 +2798,7 @@ function showGame(){
   document.getElementById("tagline").hidden=true;   /* redundant once playing */
   document.getElementById("menu").hidden=true;
   document.getElementById("gameView").hidden=false;
+  document.getElementById("gearBtn").hidden=false;
   document.getElementById("backBtn").hidden=false;
 }
 function startMode(mode, level){
@@ -2983,7 +3075,24 @@ window.__G={freshState:freshState,legalMoves:legalMoves,applyMove:applyMove,opp:
             winChance:winChance,captureOdds:captureOdds,atkDice:atkDice,defDice:defDice,
             describePly:describePly,enterReview:enterReview,getState:function(){return state;},
             runHeroScene:function(){return runHeroScene();},reducedMotion:function(){return reduced;},
-            PUZZLES:PUZZLES,sqi:sqi,
+            PUZZLES:PUZZLES,sqi:sqi,HERO_SCENES:HERO_SCENES,
+            lastGrade:function(){return lastGrade;},
+            /* Maps the 3x3 onto a real board and asks the move generator whether
+               each menu capture is a move that piece could actually make. */
+            checkHeroScenes:function(){
+              return HERO_SCENES.map(function(s){
+                var to8=function(i){ return (2+Math.floor(i/3))*8 + (2+(i%3)); };
+                var b=[]; for(var i=0;i<64;i++) b.push("");
+                b[to8(s.from)]=s.atk[0]+s.atk[1];
+                b[to8(s.to)]=s.def[0]+s.def[1];
+                b[0]="bk"; b[63]="wk";           // kings parked out of the way
+                var st={board:b,turn:s.atk[0],castling:{wK:false,wQ:false,bK:false,bQ:false},
+                        ep:null,halfmove:0};
+                var legal=legalMoves(st,s.atk[0]).some(function(m){
+                  return m.from===to8(s.from) && m.to===to8(s.to) && m.capture; });
+                return {piece:s.atk[1], from:s.from, to:s.to, legalCapture:legal};
+              });
+            },
             audioInfo:function(){return {ctx:actx,master:master,ready:audioReady,
                                          state:actx?actx.state:"none"};},
             snd:{move:sndMove,capture:sndCapture,repel:sndRepel,die:sndDie,
