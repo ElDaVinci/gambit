@@ -115,7 +115,14 @@ body{
 .app{max-width:1000px;margin:0 auto}
 
 /* ---- masthead ---- */
-.masthead{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+.masthead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.backBtn{font:inherit;font-size:19px;line-height:1;color:var(--ink-soft);
+  background:var(--surface);border:1px solid var(--line);border-radius:10px;
+  width:38px;height:38px;display:grid;place-items:center;cursor:pointer;flex:none;
+  box-shadow:var(--shadow)}
+.backBtn:hover{color:var(--brass);border-color:var(--brass)}
+.backBtn:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+.backBtn[hidden]{display:none}
 .wordmark{font-family:"Zilla Slab",Georgia,serif;font-weight:700;font-size:26px;letter-spacing:.01em;margin:0;line-height:1}
 .wordmark .die{color:var(--brass)}
 .tagline{color:var(--muted);font-size:13.5px;margin:0}
@@ -152,12 +159,16 @@ body{
   width:132px;border-radius:8px;overflow:hidden;
   box-shadow:0 8px 22px -12px rgba(0,0,0,.6);flex:none}
 .heroBoard .hsq{position:relative;aspect-ratio:1;display:grid;place-items:center}
-.heroBoard .hsq svg{width:78%;height:78%}
+.heroBoard .hsq svg{width:78%;height:78%;
+  transition:transform .34s cubic-bezier(.22,.68,.28,1), opacity .3s}
 .heroBoard .hsq.target::after{content:"";position:absolute;inset:8%;border-radius:50%;
   border:3px solid var(--repel);box-shadow:0 0 8px -1px var(--repel);
-  animation:targetPulse 3.4s ease-in-out infinite}
-@keyframes targetPulse{0%,100%{opacity:.55}50%{opacity:1}}
-.heroRoll{display:flex;align-items:center;gap:14px}
+  animation:targetPulse 1.6s ease-in-out infinite;transition:opacity .25s}
+.heroBoard .hsq.resolved::after{opacity:0;animation:none}
+@keyframes targetPulse{0%,100%{opacity:.5}50%{opacity:1}}
+.heroBoard svg.falls{opacity:0;transform:scale(.55) rotate(-14deg)}
+.heroRoll{display:flex;align-items:center;gap:12px}
+.heroSide{display:flex;gap:8px}
 /* .dieWrap / .dieBox are defined later in this stylesheet, so these need the
    extra class to win — otherwise the hero dice inherit the overlay's 64px. */
 .heroRoll .dieWrap,.heroRoll .dieBox{width:52px;height:52px;--half:26px}
@@ -372,6 +383,8 @@ body.dragging .sq{cursor:grabbing}
 .turn-chip .dot.b{background:var(--piece-black)}
 
 .controls{display:flex;flex-direction:column;gap:8px}
+.opponentBox{display:flex;flex-direction:column;gap:8px}
+.opponentBox[hidden]{display:none}   /* author display outranks the UA [hidden] rule */
 .btn{
   font:inherit;font-weight:500;color:var(--ink);background:var(--surface-2);border:1px solid var(--line);
   border-radius:8px;padding:9px 12px;cursor:pointer;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:8px
@@ -485,7 +498,11 @@ details.rules .body li{margin:3px 0}
   border:1px solid rgba(90,80,55,.30);
   box-shadow:inset 0 0 14px rgba(120,100,60,.22);
   display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);
-  padding:9px;gap:2px;backface-visibility:visible;
+  padding:9px;gap:2px;
+  /* Hidden, not visible: the cube is hollow, so the three faces pointing away
+     were showing through the front one as ghost outlines and stray pips. */
+  backface-visibility:hidden;
+  -webkit-backface-visibility:hidden;
 }
 .face i{width:11px;height:11px;border-radius:50%;align-self:center;justify-self:center;
   background:radial-gradient(circle at 34% 30%,#5d5340,#241f16);
@@ -559,6 +576,9 @@ details.rules .body li{margin:3px 0}
 
 <div class="app">
   <header class="masthead">
+    <button class="backBtn" id="backBtn" type="button" aria-label="Back to the menu" hidden>
+      <span aria-hidden="true">&#8592;</span>
+    </button>
     <h1 class="wordmark">Gambit<span class="die">.</span></h1>
     <p class="tagline">Standard chess &mdash; but every capture is a roll of the dice.</p>
     <span class="mast-spacer"></span>
@@ -575,9 +595,9 @@ details.rules .body li{margin:3px 0}
       <div class="heroStage">
         <div class="heroBoard" id="heroBoard" aria-hidden="true"></div>
         <div class="heroRoll">
-          <div class="dieWrap heroDie"><div class="dieBox" id="heroDieA"></div><div class="dieShadow"></div></div>
+          <div class="heroSide" id="heroAtkDice"></div>
           <span class="heroVs">vs</span>
-          <div class="dieWrap heroDie"><div class="dieBox" id="heroDieD"></div><div class="dieShadow"></div></div>
+          <div class="heroSide" id="heroDefDice"></div>
         </div>
       </div>
       <p class="heroVerdict" id="heroVerdict">&nbsp;</p>
@@ -703,6 +723,7 @@ details.rules .body li{margin:3px 0}
       <div class="card">
         <h2>Table</h2>
         <div class="controls">
+          <div class="opponentBox" id="opponentBox">
           <label class="switch"><span>Play against the computer</span>
             <input type="checkbox" id="botToggle"><span class="track"></span></label>
           <div class="fields" id="botOpts" hidden>
@@ -720,6 +741,7 @@ details.rules .body li{margin:3px 0}
                 <option value="w">White</option>
               </select>
             </label>
+          </div>
           </div>
           <label class="switch"><span>Rotate board each turn</span>
             <input type="checkbox" id="rotateToggle"><span class="track"></span></label>
@@ -2202,13 +2224,19 @@ var training=false, lessonIdx=0, lessonDone=false;
 
 function startTraining(){
   training=true; lessonIdx=0;
-  botOn=false;
+  /* Always against the computer: every lesson has the learner playing White, so
+     someone has to answer for Black. Choosing an opponent is what the menu is
+     for, so the Table panel's toggle is hidden here rather than left to confuse. */
+  botOn=true; botSide="b"; botLevel="easy";
+  document.getElementById("botToggle").checked=true;
+  document.getElementById("opponentBox").hidden=true;
   document.getElementById("trainBar").hidden=false;
   loadLesson(0);
 }
 function stopTraining(){
   training=false; lessonDone=false;
   document.getElementById("trainBar").hidden=true;
+  document.getElementById("opponentBox").hidden=false;
 }
 function loadLesson(i){
   lessonIdx=Math.max(0, Math.min(LESSONS.length-1, i));
@@ -2269,12 +2297,25 @@ function buildMenuArt(){
     for(var c=1;c<=9;c++) h+="<span>"+(lit.indexOf(c)>=0?"<i></i>":"")+"</span>";
     td.innerHTML=h;
   }
-  // the 3x3 board fragment: white knight, black pawn, pawn ringed as the target
+}
+
+/* The 3×3 board keeps its nine squares; only the two pieces on it change.
+   Attacker sits in the middle, defender directly above it. */
+var HERO_SCENES=[
+  {atk:["w","n"], def:["b","p"]},
+  {atk:["b","r"], def:["w","b"]},
+  {atk:["w","q"], def:["b","r"]},   // the Queen brings a second die
+  {atk:["w","p"], def:["b","n"]},
+  {atk:["b","q"], def:["w","n"]},
+  {atk:["w","r"], def:["b","b"]}
+];
+var heroTimer=null, heroScene=0, heroForceWin=true, heroSpins=0;
+
+function heroSquares(scene){
   var hb=document.getElementById("heroBoard");
-  if(!hb) return;
   var cells=[
-    {d:0}, {d:1, pc:["b","p"], target:true}, {d:0},
-    {d:1}, {d:0, pc:["w","n"]},              {d:1},
+    {d:0}, {d:1, pc:scene.def, target:true}, {d:0},
+    {d:1}, {d:0, pc:scene.atk},              {d:1},
     {d:0}, {d:1},                            {d:0}
   ];
   hb.innerHTML = cells.map(function(c){
@@ -2283,32 +2324,81 @@ function buildMenuArt(){
   }).join("");
 }
 
-var heroTimer=null;
-function startHeroLoop(){
-  var A=document.getElementById("heroDieA"), D=document.getElementById("heroDieD");
-  var V=document.getElementById("heroVerdict");
-  if(!A||!D) return;
-  buildDie(A); buildDie(D);
-  var spins=0;
-  function roll(){
-    if(document.getElementById("menu").hidden) return;   // paused while playing
-    var a=d6(), b=d6();
-    while(a===b){ a=d6(); b=d6(); }                      // ties re-roll, as in the game
-    spins++;
-    if(reduced){ rollDie(A,a,0); rollDie(D,b,0); }
-    else { rollDie(A,a,1+spins); rollDie(D,b,2+spins); }
-    var settle = reduced ? 40 : 1150;
-    setTimeout(function(){
-      var win=a>b;
-      V.textContent = win ? "Capture — the pawn falls" : "Repelled — the knight is lost";
-      V.className = "heroVerdict "+(win?"win":"lose");
-    }, settle);
+function heroBuildDice(host, n){
+  host.innerHTML="";
+  var boxes=[];
+  for(var i=0;i<n;i++){
+    var w=document.createElement("div"); w.className="dieWrap";
+    var b=document.createElement("div"); b.className="dieBox";
+    var sh=document.createElement("div"); sh.className="dieShadow";
+    buildDie(b);
+    b.style.transform="rotateX(-24deg) rotateY(18deg)";
+    w.appendChild(b); w.appendChild(sh); host.appendChild(w);
+    boxes.push(b);
   }
-  roll();
+  return boxes;
+}
+
+function startHeroLoop(){
+  if(!document.getElementById("heroBoard")) return;
   clearInterval(heroTimer);
-  heroTimer=setInterval(roll, reduced ? 2600 : 3400);
+  runHeroScene();
+  heroTimer=setInterval(runHeroScene, reduced ? 3000 : 5200);
 }
 function stopHeroLoop(){ clearInterval(heroTimer); heroTimer=null; }
+
+function runHeroScene(){
+  if(document.getElementById("menu").hidden) return;    // paused while playing
+  var V=document.getElementById("heroVerdict");
+  var scene=HERO_SCENES[heroScene % HERO_SCENES.length];
+  heroScene++;
+  heroSpins++;
+
+  heroSquares(scene);
+  var nA=atkDice(scene.atk[1]), nD=defDice(scene.def[1]);
+  var boxesA=heroBuildDice(document.getElementById("heroAtkDice"), nA);
+  var boxesD=heroBuildDice(document.getElementById("heroDefDice"), nD);
+  V.textContent=" "; V.className="heroVerdict";
+
+  /* Alternate the outcome so both halves of the rule get shown, then roll real
+     dice until they actually produce it — the faces you see are always a valid
+     roll for the result, never a fixed picture. */
+  heroForceWin = !heroForceWin;
+  var va, vd, a, d, guard=0;
+  do{
+    va=[]; vd=[];
+    for(var i=0;i<nA;i++) va.push(d6());
+    for(var j=0;j<nD;j++) vd.push(d6());
+    a=Math.max.apply(null,va); d=Math.max.apply(null,vd);
+  } while(((a===d) || ((a>d)!==heroForceWin)) && guard++<200);
+
+  boxesA.forEach(function(b,i){ rollDie(b, va[i], reduced?0:1+heroSpins+i); });
+  boxesD.forEach(function(b,i){ rollDie(b, vd[i], reduced?0:2+heroSpins+i); });
+
+  var settle = reduced ? 60 : 1250;
+  setTimeout(function(){
+    if(document.getElementById("menu").hidden) return;
+    var win=a>d;
+    var atkName=NAME[scene.atk[1]].toLowerCase(), defName=NAME[scene.def[1]].toLowerCase();
+    V.textContent = win ? ("Capture — the "+defName+" falls")
+                        : ("Repelled — the "+atkName+" is lost");
+    V.className = "heroVerdict "+(win?"win":"lose");
+
+    // play the result out on the little board
+    var sqs=document.querySelectorAll("#heroBoard .hsq");
+    var defSq=sqs[1], atkSq=sqs[4];
+    defSq.classList.add("resolved");
+    if(win){
+      var moving=atkSq.querySelector("svg");
+      if(moving) moving.style.transform="translateY(-100%)";      // steps onto the square
+      var dying=defSq.querySelector("svg");
+      if(dying) dying.classList.add("falls");
+    } else {
+      var lost=atkSq.querySelector("svg");
+      if(lost) lost.classList.add("falls");                        // the attacker dies
+    }
+  }, settle);
+}
 
 /* ================= screens ================= */
 function showMenu(){
@@ -2318,12 +2408,14 @@ function showMenu(){
   document.getElementById("gameover").classList.remove("show");
   document.getElementById("menu").hidden=false;
   document.getElementById("gameView").hidden=true;
+  document.getElementById("backBtn").hidden=true;
   startHeroLoop();
 }
 function showGame(){
   stopHeroLoop();
   document.getElementById("menu").hidden=true;
   document.getElementById("gameView").hidden=false;
+  document.getElementById("backBtn").hidden=false;
 }
 function startMode(mode, level){
   showGame();
@@ -2393,6 +2485,7 @@ document.querySelectorAll(".mode").forEach(function(tile){
   });
 });
 document.getElementById("menuBtn").addEventListener("click", showMenu);
+document.getElementById("backBtn").addEventListener("click", showMenu);
 
 /* ---- training ---- */
 document.getElementById("tPrev").addEventListener("click", function(){ loadLesson(lessonIdx-1); });
@@ -2538,6 +2631,7 @@ window.__G={freshState:freshState,legalMoves:legalMoves,applyMove:applyMove,opp:
             buildDie:buildDie,rollDie:rollDie,FACE_ROT:FACE_ROT,PIPS:PIPS,
             winChance:winChance,captureOdds:captureOdds,atkDice:atkDice,defDice:defDice,
             describePly:describePly,enterReview:enterReview,getState:function(){return state;},
+            runHeroScene:function(){return runHeroScene();},reducedMotion:function(){return reduced;},
             audioInfo:function(){return {ctx:actx,master:master,ready:audioReady,
                                          state:actx?actx.state:"none"};},
             snd:{move:sndMove,capture:sndCapture,repel:sndRepel,die:sndDie,

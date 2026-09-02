@@ -177,6 +177,24 @@ Two CSS lessons, both about ordering and specificity:
 - The hero took 359px of an 812px phone screen; a `max-width:430px` block brings it to
   231px so all four difficulty tiles are visible without scrolling.
 
+## Start screen, third pass ✅ DONE
+
+- **Dice were showing ghost outlines.** `.face` had `backface-visibility: visible`, so the
+  three faces pointing away from the camera rendered through the front one as stray
+  outlines and pips. Set to `hidden`. Fixes the battle overlay dice too.
+- **The 3×3 board is now a demo reel.** Nine squares kept. Six scenarios cycle
+  (knight→pawn, rook→bishop, queen→rook, pawn→knight, queen→knight, rook→bishop), the
+  dice tumble, and the result *plays out on the board*: on a capture the attacker steps
+  onto the square and the defender fades away; when repelled the attacker is the one that
+  falls. The queen's scenarios show two attacking dice.
+  Outcomes deliberately alternate so both halves of the rule get shown — but the dice are
+  rolled for real until they produce that outcome, so the faces on screen are always a
+  valid roll for the result, never a fixed picture.
+- **Training is always against the computer.** Every lesson has the learner as White, so
+  someone must answer for Black. The Table panel's opponent switch is hidden during
+  training — choosing an opponent is what the menu is for.
+- **Back button, top left**, shown only inside a game.
+
 ## Phase 6 — next
 
 - **Playtest.** Does the 50/50-everything feel good, or too swingy? Tune from real games.
