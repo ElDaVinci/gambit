@@ -110,6 +110,7 @@ body{
 .wordmark{font-family:"Zilla Slab",Georgia,serif;font-weight:700;font-size:26px;letter-spacing:.01em;margin:0;line-height:1}
 .wordmark .die{color:var(--brass)}
 .tagline{color:var(--muted);font-size:13.5px;margin:0}
+.tagline[hidden]{display:none}
 .mast-spacer{flex:1 1 40px}
 .icon-btn{
   font:inherit;color:var(--ink-soft);background:var(--surface);border:1px solid var(--line);
@@ -361,6 +362,20 @@ body.dragging .sq{cursor:grabbing}
 .sq .coord{color:var(--board-dark)}
 .sq.dark .coord{color:var(--board-light)}
 
+/* ---- settings sheet ---- */
+.gearBtn{font-size:17px;padding:8px 11px}
+.sheet{position:fixed;inset:0;z-index:70;display:grid;place-items:start center;
+  padding:14px;background:color-mix(in srgb,var(--bg) 68%,transparent);
+  backdrop-filter:blur(3px);overflow-y:auto}
+.sheet[hidden]{display:none}
+.sheetPanel{width:min(420px,94vw);margin-top:56px;background:var(--surface);
+  border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:var(--shadow);
+  display:flex;flex-direction:column;gap:12px}
+.sheetHead{display:flex;align-items:center;justify-content:space-between}
+.sheetHead h2{font-family:"Zilla Slab",Georgia,serif;font-weight:600;font-size:19px;margin:0}
+.sheetRules{padding:0 12px;background:var(--surface-2)}
+#rotateRow[hidden]{display:none}
+
 /* ---- game review ---- */
 .reviewBar{margin-top:12px;background:var(--surface);border:1px solid var(--line);
   border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow);
@@ -383,6 +398,7 @@ body.dragging .sq{cursor:grabbing}
 .rvGhost{background:transparent}
 /* ---- rail ---- */
 .rail{display:flex;flex-direction:column;gap:14px;min-width:0}
+.rail[hidden]{display:none}   /* hidden in training: board and prompt only */
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow)}
 .card h2{
   font-family:"IBM Plex Sans";font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
@@ -492,7 +508,7 @@ details.rules .body li{margin:3px 0}
 /* ---- 3D dice ---- */
 .dice{display:flex;align-items:center;justify-content:center;gap:34px;margin:14px 0 6px}
 .dieBox{--half:32px;width:64px;height:64px;position:relative;transform-style:preserve-3d;
-  transition:transform 1.15s cubic-bezier(.22,.72,.24,1)}
+  transition:transform .78s cubic-bezier(.22,.72,.24,1)}
 .dieShadow{position:absolute;left:50%;top:70px;width:56px;height:10px;border-radius:50%;
   transform:translateX(-50%);background:rgba(0,0,0,.28);opacity:.85;
   transition:background .25s, width .25s}
@@ -591,12 +607,52 @@ details.rules .body li{margin:3px 0}
       <span aria-hidden="true">&#8592;</span>
     </button>
     <h1 class="wordmark">Gambit<span class="die">.</span></h1>
-    <p class="tagline">Standard chess &mdash; but every capture is a roll of the dice.</p>
+    <p class="tagline" id="tagline">Standard chess &mdash; but every capture is a roll of the dice.</p>
     <span class="mast-spacer"></span>
-    <button class="icon-btn" id="themeBtn" type="button" aria-label="Toggle light or dark theme">
-      <span id="themeIcon">&#9789;</span><span id="themeLabel">Theme</span>
+    <button class="icon-btn gearBtn" id="gearBtn" type="button" aria-label="Settings">
+      <span aria-hidden="true">&#9881;</span>
     </button>
   </header>
+
+  <!-- everything that isn't the game itself lives behind the gear -->
+  <div class="sheet" id="settings" hidden>
+    <div class="sheetPanel">
+      <div class="sheetHead">
+        <h2>Settings</h2>
+        <button class="rbtn" id="settingsClose" type="button" aria-label="Close">&times;</button>
+      </div>
+      <div class="controls">
+        <label class="switch"><span>Dark theme</span>
+          <input type="checkbox" id="themeToggle"><span class="track"></span></label>
+        <div class="opponentBox" id="opponentBox">
+          <label class="switch"><span>Play against the computer</span>
+            <input type="checkbox" id="botToggle"><span class="track"></span></label>
+          <div class="fields" id="botOpts" hidden>
+            <label class="field"><span>Strength</span>
+              <select id="botLevel">
+                <option value="easy">Easy</option>
+                <option value="medium" selected>Medium</option>
+                <option value="hard">Hard</option>
+                <option value="master">Master</option>
+              </select>
+            </label>
+            <label class="field"><span>Computer plays</span>
+              <select id="botSide">
+                <option value="b" selected>Black</option>
+                <option value="w">White</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <label class="switch" id="rotateRow"><span>Rotate board each turn</span>
+          <input type="checkbox" id="rotateToggle"><span class="track"></span></label>
+      </div>
+      <details class="rules sheetRules">
+        <summary>How Gambit differs from chess</summary>
+        <div class="body" id="rulesBody"></div>
+      </details>
+    </div>
+  </div>
 
   <!-- start screen: pick an opponent before the board appears -->
   <section class="menu" id="menu">
@@ -717,8 +773,8 @@ details.rules .body li{margin:3px 0}
           <button class="btn rvGhost" id="pzRetry" type="button">Retry</button>
           <button class="btn primary" id="pzNext" type="button">Next</button>
         </div>
-        <p class="pzNote" id="pzNote" hidden>Puzzles resolve captures without dice, so the
-          tactic is the only thing being tested.</p>
+        <p class="pzNote" id="pzNote" hidden>The dice apply here too &mdash; find the right
+          move, then win the roll. Lose it and the puzzle simply starts again.</p>
       </div>
 
       <div class="boardTools">
@@ -752,7 +808,7 @@ details.rules .body li{margin:3px 0}
       </div>
     </section>
 
-    <aside class="rail">
+    <aside class="rail" id="rail">
       <div class="card">
         <h2>Status</h2>
         <p class="status-line" id="statusLine">White to move</p>
@@ -761,57 +817,21 @@ details.rules .body li{margin:3px 0}
       </div>
 
       <div class="card">
-        <h2>Last battle</h2>
-        <p class="status-sub" id="battleLog" style="margin:0">No captures attempted yet.</p>
-      </div>
-
-      <div class="card">
-        <h2>Table</h2>
-        <div class="controls">
-          <div class="opponentBox" id="opponentBox">
-          <label class="switch"><span>Play against the computer</span>
-            <input type="checkbox" id="botToggle"><span class="track"></span></label>
-          <div class="fields" id="botOpts" hidden>
-            <label class="field"><span>Strength</span>
-              <select id="botLevel">
-                <option value="easy">Easy</option>
-                <option value="medium" selected>Medium</option>
-                <option value="hard">Hard</option>
-                <option value="master">Master</option>
-              </select>
-            </label>
-            <label class="field"><span>Computer plays</span>
-              <select id="botSide">
-                <option value="b" selected>Black</option>
-                <option value="w">White</option>
-              </select>
-            </label>
-          </div>
-          </div>
-          <label class="switch"><span>Rotate board each turn</span>
-            <input type="checkbox" id="rotateToggle"><span class="track"></span></label>
-        </div>
-      </div>
-
-      <div class="card">
         <h2>Moves</h2>
         <div class="log" id="log"><span class="empty">The game hasn&rsquo;t started.</span></div>
       </div>
-
-      <details class="rules">
-        <summary>How Gambit differs from chess</summary>
-        <div class="body">
-          <ul>
-            <li>Movement, check, castling, en&nbsp;passant, promotion &mdash; all standard.</li>
-            <li>A capture is a <strong>battle</strong>: attacker rolls 1d6, defender rolls 1d6, higher wins, ties re-roll &rarr; 50/50.</li>
-            <li>The <strong>Queen rolls two dice when she attacks</strong> and keeps the higher &mdash; about <strong>69%</strong>. She still defends with one, so she is no harder to kill.</li>
-            <li>Attacker wins &rarr; normal capture. Attacker loses &rarr; <strong>the attacking piece is removed</strong>; the defender holds its square.</li>
-            <li>The King never rolls. A King capturing a piece succeeds automatically.</li>
-            <li>While your King is in check you keep moving &mdash; risking further pieces if you choose &mdash; until it is safe, or it is checkmate.</li>
-          </ul>
-        </div>
-      </details>
     </aside>
+
+    <template id="rulesText">
+      <ul>
+        <li>Movement, check, castling, en&nbsp;passant, promotion &mdash; all standard.</li>
+        <li>A capture is a <strong>battle</strong>: attacker rolls 1d6, defender rolls 1d6, higher wins, ties re-roll &rarr; 50/50.</li>
+        <li>The <strong>Queen rolls two dice when she attacks</strong> and keeps the higher &mdash; about <strong>69%</strong>. She still defends with one, so she is no harder to kill.</li>
+        <li>Attacker wins &rarr; normal capture. Attacker loses &rarr; <strong>the attacking piece is removed</strong>; the defender holds its square.</li>
+        <li>The King never rolls. A King capturing a piece succeeds automatically.</li>
+        <li>While your King is in check you keep moving &mdash; risking further pieces if you choose &mdash; until it is safe, or it is checkmate.</li>
+      </ul>
+    </template>
   </main>
 </div>
 
@@ -1471,11 +1491,6 @@ function commit(mv){
     finalize(mv, true, null);
     return;
   }
-  /* Puzzles are about the tactic, so captures there resolve without the dice —
-     otherwise a solution that runs through a capture is unsolvable whenever the
-     roll goes against you, which tests luck instead of the idea. */
-  if(puzzleActive){ finalize(mv, true, null); return; }
-
   var defSq = mv.ep ? idx(rowOf(mv.from),colOf(mv.to)) : mv.to;
   var defPc = b[defSq], defType=defPc[1], defColor=defPc[0];
   render();
@@ -1504,12 +1519,6 @@ function finalize(mv, success, extra){
     rolls: (mv.capture && lastBattle) ? lastBattle.rounds : null
   };
   lastBattle=null;
-
-  if(mv.capture){
-    var dn = (extra && extra.defType) ? NAME[extra.defType] : "piece";
-    document.getElementById("battleLog").textContent =
-      NAME[atkType] + " vs " + dn + " on " + sqName(mv.to) + " — " + (success ? "captured" : "repelled");
-  }
 
   var noteResult = mv.capture ? success : null;
 
@@ -2349,14 +2358,16 @@ function startTraining(){
   document.getElementById("opponentBox").hidden=true;
   document.getElementById("trainBar").hidden=false;
   document.getElementById("trainActions").hidden=false;
+  document.getElementById("rail").hidden=true;
   document.getElementById("cardTop").hidden=true;
   document.getElementById("cardBottom").hidden=true;
-  setTrainTab("rules");
+  setTrainTab("puzzles");   /* puzzles first; Rules is a tab away */
 }
 function stopTraining(){
   training=false; lessonDone=false; puzzleActive=false; hintSq=-1;
   document.getElementById("trainBar").hidden=true;
   document.getElementById("trainActions").hidden=true;
+  document.getElementById("rail").hidden=false;
   document.getElementById("cardTop").hidden=false;
   document.getElementById("cardBottom").hidden=false;
   document.getElementById("opponentBox").hidden=false;
@@ -2433,6 +2444,7 @@ function renderPuzzle(){
   if(puzzleState==="opening") msg="Watch — the opponent moves first.";
   else if(puzzleState==="solved"){ msg="Solved. "+P.theme+"."; cls+=" done"; }
   else if(puzzleState==="wrong") msg="Not the move. Resetting so you can try again.";
+  else if(puzzleState==="unlucky") msg="Right idea — but the dice went against you. Going again.";
   else {
     var left=P.solution.length-puzzleStep;
     msg="Your move. "+(left===P.solution.length
@@ -2455,13 +2467,30 @@ function checkPuzzle(h){
     return;
   }
   if(puzzleState!=="solving") return;
-  if(h.color!=="w") return;                    // only judge the player's moves
+  if(h.color!=="w"){
+    /* The opponent's scripted answer can itself be repelled by the dice, which
+       leaves a position the rest of the line no longer fits. Start over. */
+    if(h.capture && !h.success){
+      puzzleState="unlucky"; hintSq=-1;
+      renderPuzzle(); render();
+      setTimeout(function(){ if(puzzleActive) loadPuzzle(puzzleIdx); }, 2100);
+    }
+    return;
+  }
 
   var want=P.solution[puzzleStep];
   if(!want || h.from!==want.from || h.to!==want.to){
     puzzleState="wrong"; hintSq=-1;
     renderPuzzle(); render();
     setTimeout(function(){ if(puzzleActive) loadPuzzle(puzzleIdx); }, 1500);
+    return;
+  }
+  /* Right move, wrong roll. The dice are live in puzzles too, so a correct
+     idea can still be repelled — which is the whole point of this game. */
+  if(h.capture && !h.success){
+    puzzleState="unlucky"; hintSq=-1;
+    renderPuzzle(); render();
+    setTimeout(function(){ if(puzzleActive) loadPuzzle(puzzleIdx); }, 2100);
     return;
   }
   puzzleStep++; hintSq=-1;
@@ -2562,7 +2591,7 @@ function startHeroLoop(){
   if(!document.getElementById("heroBoard")) return;
   clearInterval(heroTimer);
   runHeroScene();
-  heroTimer=setInterval(runHeroScene, reduced ? 3000 : 5200);
+  heroTimer=setInterval(runHeroScene, reduced ? 1800 : 3000);
 }
 function stopHeroLoop(){ clearInterval(heroTimer); heroTimer=null; }
 
@@ -2594,7 +2623,7 @@ function runHeroScene(){
   boxesA.forEach(function(b,i){ rollDie(b, va[i], reduced?0:1+heroSpins+i); });
   boxesD.forEach(function(b,i){ rollDie(b, vd[i], reduced?0:2+heroSpins+i); });
 
-  var settle = reduced ? 60 : 1250;
+  var settle = reduced ? 50 : 800;
   setTimeout(function(){
     if(document.getElementById("menu").hidden) return;
     var win=a>d;
@@ -2626,11 +2655,13 @@ function showMenu(){
   document.getElementById("gameover").classList.remove("show");
   document.getElementById("menu").hidden=false;
   document.getElementById("gameView").hidden=true;
+  document.getElementById("tagline").hidden=false;
   document.getElementById("backBtn").hidden=true;
   startHeroLoop();
 }
 function showGame(){
   stopHeroLoop();
+  document.getElementById("tagline").hidden=true;   /* redundant once playing */
   document.getElementById("menu").hidden=true;
   document.getElementById("gameView").hidden=false;
   document.getElementById("backBtn").hidden=false;
@@ -2676,7 +2707,6 @@ function newGame(keepTraining){
   legalCache=legalMoves(state, state.turn);
   state.posCounts[posKey(state)]=1;
   document.getElementById("gameover").classList.remove("show");
-  document.getElementById("battleLog").textContent="No captures attempted yet.";
   render(); renderLog();
   maybeBot();
 }
@@ -2819,22 +2849,37 @@ rotToggle.addEventListener("change", function(){
   render();
 });
 
-var themeBtn=document.getElementById("themeBtn");
+/* ---- settings sheet ---- */
 function applyTheme(t){
   if(t==="light"||t==="dark"){ document.documentElement.dataset.theme=t; }
   else { delete document.documentElement.dataset.theme; }
   var dark = t==="dark" || (!t && window.matchMedia("(prefers-color-scheme: dark)").matches);
-  document.getElementById("themeIcon").innerHTML = dark ? "&#9788;" : "&#9789;";
+  document.getElementById("themeToggle").checked = dark;
 }
 var savedTheme=null;
 try{ savedTheme=localStorage.getItem("gambit.theme"); }catch(e){}
 applyTheme(savedTheme);
-themeBtn.addEventListener("click", function(){
-  var cur=document.documentElement.dataset.theme;
-  var next = cur==="dark" ? "light" : cur==="light" ? "dark" :
-            (window.matchMedia("(prefers-color-scheme: dark)").matches ? "light" : "dark");
+document.getElementById("themeToggle").addEventListener("change", function(){
+  var next=this.checked ? "dark" : "light";
   applyTheme(next);
   try{ localStorage.setItem("gambit.theme", next); }catch(e){}
+});
+document.getElementById("rulesBody").appendChild(
+  document.getElementById("rulesText").content.cloneNode(true));
+
+var settingsEl=document.getElementById("settings");
+function openSettings(){
+  /* Rotating the board makes no sense in training: it is always you as White
+     against the computer, and a puzzle would flip mid-solve. */
+  document.getElementById("rotateRow").hidden = training;
+  settingsEl.hidden=false;
+}
+function closeSettings(){ settingsEl.hidden=true; }
+document.getElementById("gearBtn").addEventListener("click", openSettings);
+document.getElementById("settingsClose").addEventListener("click", closeSettings);
+settingsEl.addEventListener("click", function(e){ if(e.target===settingsEl) closeSettings(); });
+document.addEventListener("keydown", function(e){
+  if(e.key==="Escape" && !settingsEl.hidden){ e.preventDefault(); closeSettings(); }
 });
 
 /* ---- opening animation ---- */
