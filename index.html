@@ -233,10 +233,13 @@ body{
   background:radial-gradient(circle at 34% 30%,#5d5340,#241f16)}
 
 /* ---- training ---- */
-.trainBar{margin-top:12px;background:var(--surface);border:1px solid var(--line);
+.trainBar{margin:0 0 10px;background:var(--surface);border:1px solid var(--line);
   border-radius:var(--radius);padding:13px 14px;box-shadow:var(--shadow);
   display:flex;flex-direction:column;gap:8px}
 .trainBar[hidden]{display:none}
+.trainActions{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+.trainActions[hidden]{display:none}
+#rulesActions[hidden],#puzzleActionsRow[hidden],#pzNote[hidden]{display:none}
 .tStep{font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
   color:var(--brass)}
 .tTitle{font-family:"Zilla Slab",Georgia,serif;font-weight:600;font-size:17px;margin:0}
@@ -271,6 +274,9 @@ body{
 /* ---- player cards (opponent above the board, you below) ---- */
 .playerCard{display:flex;align-items:center;gap:9px;padding:7px 10px;min-height:46px;
   background:var(--surface);border:1px solid var(--line);border-radius:10px}
+/* hidden during training — a puzzle has no material tally worth showing, and
+   the two cards cost ~104px that the prompt and buttons need on a phone */
+.playerCard[hidden]{display:none}
 #cardTop{margin-bottom:6px}
 #cardBottom{margin-top:6px}
 .playerCard.toMove{border-color:var(--brass);
@@ -671,6 +677,36 @@ details.rules .body li{margin:3px 0}
 
   <main class="game" id="gameView" hidden>
     <section class="board-wrap" aria-label="Chess board">
+      <!-- Training prompt sits ABOVE the board. It used to live under it, which
+           put it 500px off-screen on a phone — nobody ever found the tabs. -->
+      <div class="trainBar" id="trainBar" hidden>
+        <div class="tTabs">
+          <button class="tTab on" id="tabRules" type="button">Rules</button>
+          <button class="tTab" id="tabPuzzles" type="button">Puzzles</button>
+        </div>
+
+        <div id="rulesPane">
+          <span class="tStep" id="tStep">Lesson 1 of 5</span>
+          <h3 class="tTitle" id="tTitle"></h3>
+          <p class="tText" id="tText"></p>
+          <p class="tTask" id="tTask"></p>
+        </div>
+
+        <div id="puzzlePane" hidden>
+          <div class="pzDiff" role="group" aria-label="Puzzle difficulty">
+            <button class="pzLvl on" data-lvl="easy"   type="button">Easy</button>
+            <button class="pzLvl"    data-lvl="medium" type="button">Medium</button>
+            <button class="pzLvl"    data-lvl="hard"   type="button">Hard</button>
+          </div>
+          <div class="pzHead">
+            <span class="tStep" id="pzStep">Puzzle 1 of 3</span>
+            <span class="pzGoal" id="pzGoal">Mate in 1</span>
+          </div>
+          <h3 class="tTitle" id="pzTheme"></h3>
+          <p class="tTask" id="pzStatus"></p>
+        </div>
+      </div>
+
       <!-- opponent above the board, you below: the standard chess-app sandwich -->
       <div class="playerCard" id="cardTop">
         <span class="pcAvatar" id="avTop"></span>
@@ -688,43 +724,19 @@ details.rules .body li{margin:3px 0}
         <span class="pcAdv" id="advBottom"></span>
       </div>
 
-      <div class="trainBar" id="trainBar" hidden>
-        <div class="tTabs">
-          <button class="tTab on" id="tabRules" type="button">Rules</button>
-          <button class="tTab" id="tabPuzzles" type="button">Puzzles</button>
+      <!-- Training controls sit BELOW the board, within thumb reach. -->
+      <div class="trainActions" id="trainActions" hidden>
+        <div class="tActions" id="rulesActions">
+          <button class="btn rvGhost" id="tPrev" type="button">Back</button>
+          <button class="btn primary" id="tNext" type="button">Next</button>
         </div>
-
-        <div id="rulesPane">
-          <span class="tStep" id="tStep">Lesson 1 of 5</span>
-          <h3 class="tTitle" id="tTitle"></h3>
-          <p class="tText" id="tText"></p>
-          <p class="tTask" id="tTask"></p>
-          <div class="tActions">
-            <button class="btn rvGhost" id="tPrev" type="button">Back</button>
-            <button class="btn primary" id="tNext" type="button">Next</button>
-          </div>
+        <div class="tActions" id="puzzleActionsRow" hidden>
+          <button class="btn rvGhost" id="pzHint" type="button">Hint</button>
+          <button class="btn rvGhost" id="pzRetry" type="button">Retry</button>
+          <button class="btn primary" id="pzNext" type="button">Next</button>
         </div>
-
-        <div id="puzzlePane" hidden>
-          <div class="pzDiff" role="group" aria-label="Puzzle difficulty">
-            <button class="pzLvl on" data-lvl="easy"   type="button">Easy</button>
-            <button class="pzLvl"    data-lvl="medium" type="button">Medium</button>
-            <button class="pzLvl"    data-lvl="hard"   type="button">Hard</button>
-          </div>
-          <div class="pzHead">
-            <span class="tStep" id="pzStep">Puzzle 1 of 3</span>
-            <span class="pzGoal" id="pzGoal">Mate in 1</span>
-          </div>
-          <h3 class="tTitle" id="pzTheme"></h3>
-          <p class="tTask" id="pzStatus"></p>
-          <div class="tActions">
-            <button class="btn rvGhost" id="pzHint" type="button">Hint</button>
-            <button class="btn rvGhost" id="pzRetry" type="button">Retry</button>
-            <button class="btn primary" id="pzNext" type="button">Next</button>
-          </div>
-          <p class="pzNote">Puzzles resolve captures without dice, so the tactic is the
-            only thing being tested.</p>
-        </div>
+        <p class="pzNote" id="pzNote" hidden>Puzzles resolve captures without dice, so the
+          tactic is the only thing being tested.</p>
       </div>
 
       <div class="boardTools">
@@ -2287,43 +2299,52 @@ var LESSONS=[
 function sqi(name){ return "abcdefgh".indexOf(name[0]) + (8-parseInt(name[1],10))*8; }
 function pm(from,to){ return {from:sqi(from), to:sqi(to)}; }   /* puzzle move spec */
 
+/* Real positions from actual openings and classic mating patterns, with full
+   boards — a tactic is only a tactic when there is a real position around it. */
 var PUZZLES={
   easy:[
+    { theme:"Scholar's Mate", goal:"Mate in 1", moves:1,
+      hint:"The bishop on c4 already guards f7. Bring the queen there.",
+      /* 1.e4 e5 2.Bc4 Nc6 3.Qh5 — Black now defends the wrong way. */
+      board:fromLayout(["r.bqkbnr","pppp.ppp","..n.....","....p..Q",
+                        "..B.P...","........","PPPP.PPP","RNB.K.NR"]),
+      first:pm("g8","f6"), solution:[pm("h5","f7")], replies:[] },
+
     { theme:"Back-rank mate", goal:"Mate in 1", moves:1,
-      hint:"The eighth rank is undefended.",
-      board:fromLayout(["......k.",".p...ppp","........","........",
-                        "........","........","........","...R..K."]),
-      first:pm("b7","b6"), solution:[pm("d1","d8")], replies:[] },
-    { theme:"Queen and bishop", goal:"Mate in 1", moves:1,
-      hint:"The bishop already guards the square you want.",
-      board:fromLayout(["r.....k.",".....ppp","........","........",
-                        "........","..Q.....",".B....K.","........"]),
-      first:pm("a8","a7"), solution:[pm("c3","g7")], replies:[] },
+      hint:"Black's king is walled in by its own pawns. Take the eighth rank.",
+      board:fromLayout(["......k.","ppp..ppp",".......b",".......n",
+                        ".n......","....BN..","PPP..PPP","...R..K."]),
+      first:pm("a7","a6"), solution:[pm("d1","d8")], replies:[] },
+
     { theme:"Win the queen", goal:"Win material", moves:1,
-      hint:"The knight can reach the square the queen just stepped onto.",
-      board:fromLayout(["...q..k.","........","........","...N....",
-                        "........","........","........","......K."]),
+      hint:"The knight on d5 covers the square the queen just stepped onto.",
+      board:fromLayout(["r.bq.rk.","ppp..ppp","........","n..N....",
+                        "....P...","........","PPP..PPP","R.BQ.RK."]),
       first:pm("d8","e7"), solution:[pm("d5","e7")], replies:[] }
   ],
   medium:[
-    { theme:"Scholar's finish", goal:"Mate in 2", moves:2,
-      hint:"Give check on f7 — the bishop defends the queen there.",
-      board:fromLayout([".n....k.",".....ppp","........",".......Q",
-                        "..B.....","........","........","......K."]),
-      first:pm("b8","c6"), solution:[pm("h5","f7"), pm("f7","f8")],
-      replies:[pm("g8","h8")] },
-    { theme:"Forced block", goal:"Mate in 2", moves:2,
-      hint:"Check on the eighth rank — only one piece can interpose.",
-      board:fromLayout(["..b...k.",".....ppp","........","........",
-                        "........","........","........","R.....K."]),
-      first:pm("c8","e6"), solution:[pm("a1","a8"), pm("a8","c8")],
-      replies:[pm("e6","c8")] }
+    { theme:"Légal's Mate", goal:"Mate in 1", moves:1,
+      hint:"The knight on c3 can reach a square that covers every escape.",
+      /* 1.e4 e5 2.Nf3 Nc6 3.Bc4 d6 4.Nc3 Bg4 5.h3 Bh5 6.Nxe5 Bxd1 7.Bxf7+
+         Black's king must step to e7, and then the knight finishes it. */
+      board:fromLayout(["r..qkbnr","ppp..Bpp","..np....","....N...",
+                        "....P...","..N....P","PPPP.PP.","R.BbK..R"]),
+      first:pm("e8","e7"), solution:[pm("c3","d5")], replies:[] },
+
+    { theme:"Queen and bishop", goal:"Mate in 2", moves:2,
+      hint:"Check on f7 first — the bishop defends the queen there.",
+      /* The knight on b8 is what makes this work: it walls the rook off from
+         the f8 square, so the queen cannot simply be taken at the end. */
+      board:fromLayout(["rn....k.","ppp..ppp","........",".......Q",
+                        "..B.P...","........","PPP..PPP","R....RK."]),
+      first:pm("a7","a6"), solution:[pm("h5","f7"), pm("f7","f8")],
+      replies:[pm("g8","h8")] }
   ],
   hard:[
-    { theme:"Smothered mate", goal:"Mate in 2", moves:2,
-      hint:"Offer the queen on g8 — the rook must take it.",
-      board:fromLayout([".....r.k","p.....pp",".......N","........",
-                        "........",".Q......","........","......K."]),
+    { theme:"Smothered Mate", goal:"Mate in 2", moves:2,
+      hint:"Offer the queen on g8. The rook is forced to take, and then it blocks.",
+      board:fromLayout(["r.bq.r.k","ppp...pp","..n....N","........",
+                        "........",".Q......","PPP..PPP","R.B..RK."]),
       first:pm("a7","a6"), solution:[pm("b3","g8"), pm("h6","f7")],
       replies:[pm("f8","g8")] }
   ]
@@ -2345,11 +2366,17 @@ function startTraining(){
   document.getElementById("botToggle").checked=true;
   document.getElementById("opponentBox").hidden=true;
   document.getElementById("trainBar").hidden=false;
+  document.getElementById("trainActions").hidden=false;
+  document.getElementById("cardTop").hidden=true;
+  document.getElementById("cardBottom").hidden=true;
   setTrainTab("rules");
 }
 function stopTraining(){
   training=false; lessonDone=false; puzzleActive=false; hintSq=-1;
   document.getElementById("trainBar").hidden=true;
+  document.getElementById("trainActions").hidden=true;
+  document.getElementById("cardTop").hidden=false;
+  document.getElementById("cardBottom").hidden=false;
   document.getElementById("opponentBox").hidden=false;
 }
 function loadLesson(i){
@@ -2713,6 +2740,9 @@ function setTrainTab(tab){
   document.getElementById("tabPuzzles").classList.toggle("on", !rules);
   document.getElementById("rulesPane").hidden=!rules;
   document.getElementById("puzzlePane").hidden=rules;
+  document.getElementById("rulesActions").hidden=!rules;
+  document.getElementById("puzzleActionsRow").hidden=rules;
+  document.getElementById("pzNote").hidden=rules;
   puzzleActive=!rules;
   hintSq=-1;
   if(rules){ loadLesson(lessonIdx); }
