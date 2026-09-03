@@ -76,13 +76,18 @@
 .splashRank svg{width:100%;height:100%;padding:9%}
 .splashRank i{display:block}
 /* Dice layer: same footprint as the board; each die is centred on a square via
-   left/top percentages and a negative margin of half its size. */
+   left/top percentages and a negative margin of half its size. Die size is a
+   fraction of the board, so it stays ~0.7 of a square at every screen width. */
 .splashDice{position:absolute;top:0;left:50%;transform:translateX(-50%);
-  width:min(62vw,232px);height:min(62vw,232px);pointer-events:none}
-.splashDie{position:absolute;width:34px;height:34px;margin:-17px 0 0 -17px;
-  perspective:440px;transform-style:preserve-3d}
-.splashDie .dieBox{--half:17px;width:34px;height:34px}
-.splashDie .dieShadow{top:35px;width:28px;opacity:.5}
+  --bd:min(62vw,232px);width:var(--bd);height:var(--bd);pointer-events:none;
+  --dieS:calc(var(--bd) * .086)}
+.splashDie{position:absolute;width:var(--dieS);height:var(--dieS);
+  margin:calc(var(--dieS) / -2) 0 0 calc(var(--dieS) / -2);
+  perspective:calc(var(--dieS) * 22);transform-style:preserve-3d}
+.splashDie .dieBox{--half:calc(var(--dieS) / 2);width:var(--dieS);height:var(--dieS);
+  transition:transform .95s cubic-bezier(.13,.86,.24,1)}
+.splashDie .dieShadow{top:calc(var(--dieS) * 1.04);width:calc(var(--dieS) * .82);
+  height:calc(var(--dieS) * .3);opacity:.4}
 .splashMark{font-family:"Zilla Slab",Georgia,serif;font-weight:700;
   font-size:clamp(30px,9vw,44px);letter-spacing:.01em;margin:20px 0 0;color:var(--ink)}
 .splashSub{margin:5px 0 0;font-size:12.5px;letter-spacing:.05em;color:var(--muted)}
@@ -91,8 +96,9 @@
   animation:tileIn .42s cubic-bezier(.2,.9,.3,1) forwards}
 .splash.animate .splashRank svg{opacity:0;transform:translateY(-26px);
   animation:dropIn .5s cubic-bezier(.24,1.2,.4,1) forwards}
-.splash.animate .splashDie{opacity:0;animation:diceFall .6s cubic-bezier(.2,.85,.3,1) forwards}
-.splash.animate .splashDie .dieShadow{opacity:0;animation:shadowIn .3s ease-out forwards}
+.splash.animate .splashDie{opacity:0;
+  animation:diceThrow var(--thr,.84s) cubic-bezier(.19,.7,.32,1) forwards}
+.splash.animate .splashDie .dieShadow{opacity:0;animation:diceShadow var(--thr,.84s) ease-out forwards}
 .splash.animate .splashMark{opacity:0;animation:markIn .55s ease-out 1.5s forwards}
 .splash.animate .splashSub{opacity:0;animation:markIn .55s ease-out 1.7s forwards}
 .splashSkip{position:absolute;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));
@@ -102,16 +108,34 @@
 @keyframes tileIn{to{opacity:1;transform:none}}
 @keyframes dropIn{to{opacity:1;transform:none}}
 @keyframes markIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
-/* The cube itself tumbles via rollDie() + the .dieBox transition; this only
-   drops the wrapper in and gives it a small bounce on landing. */
-@keyframes diceFall{
-  0%{opacity:0;transform:translateY(-165px)}
-  55%{opacity:1}
-  80%{transform:translateY(5px)}
-  100%{opacity:1;transform:translateY(0)}
+/* A thrown die: it flies in low and fast from off the board (--fromX/--fromY),
+   skips off the surface, then bounces twice with the height and speed dying
+   away, and settles at a slight angle (--rz). Per-segment timing functions give
+   it real bounce physics — decelerate up to each apex, accelerate back down.
+   The cube's own tumble rides on rollDie() + the .dieBox transition. */
+@keyframes diceThrow{
+  0%  {opacity:0;transform:translate(var(--fromX,120px),var(--fromY,88px)) rotate(calc(var(--rz,0deg) * -2));
+       animation-timing-function:cubic-bezier(.33,0,.4,1)}   /* in flight, coasting to first contact */
+  10% {opacity:1}
+  44% {transform:translate(calc(var(--fromX,120px) * -0.05),-16px) rotate(calc(var(--rz,0deg) * -0.5));
+       animation-timing-function:cubic-bezier(.6,0,.9,.4)}   /* apex of the incoming arc — then drop, accelerating */
+  60% {transform:translate(0,4px) rotate(var(--rz,0deg));
+       animation-timing-function:cubic-bezier(.1,.6,.3,1)}   /* hard skip off the board, kicks back up */
+  73% {transform:translate(0,-9px) rotate(var(--rz,0deg));
+       animation-timing-function:cubic-bezier(.7,0,.9,.5)}   /* bounce apex, falls again */
+  84% {transform:translate(0,2px) rotate(var(--rz,0deg));
+       animation-timing-function:cubic-bezier(.1,.6,.3,1)}   /* second, smaller skip */
+  92% {transform:translate(0,-3px) rotate(var(--rz,0deg));
+       animation-timing-function:cubic-bezier(.6,0,.5,1)}
+  100%{opacity:1;transform:translate(0,0) rotate(var(--rz,0deg))}
 }
-@keyframes shadowIn{from{opacity:0;transform:translateX(-50%) scaleX(1.5)}
-  to{opacity:.5;transform:translateX(-50%) scaleX(1)}}
+@keyframes diceShadow{
+  0%,38% {opacity:0;transform:translateX(-50%) scale(.3)}
+  58%    {opacity:.5;transform:translateX(-50%) scaleX(1.45) scaleY(.7)}  /* splat under the first skip */
+  73%    {opacity:.24;transform:translateX(-50%) scale(.8)}               /* shrinks away under the bounce */
+  84%    {opacity:.4;transform:translateX(-50%) scaleX(1.15) scaleY(.9)}  /* second, softer splat */
+  100%   {opacity:.4;transform:translateX(-50%) scale(1)}
+}
 
 *{box-sizing:border-box}
 html,body{margin:0}
@@ -3070,25 +3094,36 @@ document.addEventListener("keydown", function(e){
   }
   document.getElementById("splashRank").innerHTML=cells;
 
-  // three dice tumble down onto the board and settle on random faces
+  // three dice, thrown onto the board from off its lower-right edge: each one
+  // flies in, skips, bounces and settles on a random face at a slight angle.
   var dice=document.getElementById("splashDice");
-  var spots=[[4,2],[3,5],[5,5]];          // [row,col] on the 8x8 board
-  var diceBase=980;
+  var spots=[[3,3],[4,5],[5,3]];          // [row,col] — a loose scatter near the middle
+  var throws=[
+    {fromX:"128px", fromY:"78px",  rz:"-7deg", thr:".8s"},
+    {fromX:"104px", fromY:"116px", rz:"5deg",  thr:".9s"},
+    {fromX:"150px", fromY:"96px",  rz:"-3deg", thr:".84s"}
+  ];
+  var diceBase=970;
   spots.forEach(function(sp,i){
     var wrap=document.createElement("div"); wrap.className="splashDie";
     wrap.style.left=((sp[1]+0.5)/8*100)+"%";
     wrap.style.top =((sp[0]+0.5)/8*100)+"%";
+    var t=throws[i];
+    wrap.style.setProperty("--fromX", t.fromX);
+    wrap.style.setProperty("--fromY", t.fromY);
+    wrap.style.setProperty("--rz", t.rz);
+    wrap.style.setProperty("--thr", t.thr);
     var box=document.createElement("div"); box.className="dieBox";
     var sh =document.createElement("div"); sh.className="dieShadow";
     buildDie(box);
     wrap.appendChild(sh); wrap.appendChild(box);
-    var d=diceBase+i*175;
+    var d=diceBase+i*90;                  // thrown in a quick handful, not one at a time
     wrap.style.animationDelay=d+"ms";
-    sh.style.animationDelay=(d+380)+"ms";
+    sh.style.animationDelay=d+"ms";
     dice.appendChild(wrap);
     var v=1+Math.floor(Math.random()*6);
     if(reduced){ box.style.transition="none"; rollDie(box, v, 0); }
-    else { setTimeout(function(){ rollDie(box, v, 3+i); }, d); }
+    else { setTimeout(function(){ rollDie(box, v, 6+i*2); }, d+30); }
   });
 
   if(reduced){ setTimeout(close, 650); return; }   // show it, just don't animate

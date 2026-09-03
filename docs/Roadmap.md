@@ -227,7 +227,7 @@ move was illegal once the blocker arrived.
   Now full-size with padding, so one `-100%` is exactly one square — measured landing
   error is 0%.
 
-## Opening animation — full board + dice ✅ DONE (v17)
+## Opening animation — full board + thrown dice ✅ DONE (v17 → v18)
 
 The splash used to drop in only the white back rank — eight pieces on an otherwise
 empty board. It now assembles the **full 32-piece starting position**: `#splashRank`
@@ -235,19 +235,31 @@ became a full 8×8 grid overlay pixel-aligned to the tile board (empty middle sq
 bare `<i>` spacers), so both back ranks drop in first, then both pawn ranks in front of
 them, each rank staggered across its files.
 
-A new `#splashDice` layer drops **three dice** onto the board. They reuse the battle
-overlay's `buildDie` / `rollDie` machinery at `--half:17px`; each wrapper falls in on a
-`diceFall` keyframe while the cube itself tumbles via its `.dieBox` transition and settles
-on a random face (`rollDie(box, v, 3+i)`). Under `prefers-reduced-motion` the dice are
-placed statically on their faces and the whole splash is shown un-animated, as before.
+A new `#splashDice` layer throws **three dice** onto the board. They reuse the battle
+overlay's `buildDie` / `rollDie` machinery.
 
-Verified by DOM measurement (screenshots and the animated path are both untestable in
-this environment — the browsers force reduced-motion and the pane doesn't composite):
-32 pieces render with the correct per-type counts (16 pawns, 4/4/4 minor+rook, 2 queens,
-2 kings), 16 white / 16 black; the piece and dice overlays are pixel-aligned to the
-board; all three dice carry six faces with the correct pip layout and land on valid
-1–6 faces; the splash builds with no JS errors and removes itself cleanly, leaving the
-menu visible.
+- **v17:** dice fell straight down (`diceFall`), sized at a fixed 34px.
+- **v18:** die size is now a fraction of the board — `--dieS: calc(var(--bd) * .086)`,
+  measured at **0.69 of a square** at every width, down from ~1.17. The motion is a
+  hand-thrown `diceThrow`: each die flies in low and fast from off the board's
+  lower-right corner (`--fromX` / `--fromY`), overshoots, skips hard off the surface,
+  bounces ~9px then ~3px, and settles at a slight angle (`--rz`). Each keyframe segment
+  carries its own timing function so the bounces have real physics (decelerate up to
+  each apex, accelerate down). The cube tumbles 6–10 turns concurrently on its `.dieBox`
+  transition. The shadow splats, lifts, and re-splats in time with the bounces. Dice are
+  thrown as a quick handful (90 ms apart), each with a slightly different trajectory.
+
+Under `prefers-reduced-motion` the dice are placed statically on their faces and the
+whole splash is shown un-animated, as before.
+
+Verified by DOM measurement + Web-Animations replay of the exact keyframes (screenshots
+and compiled CSS animation are untestable here — the browsers force reduced-motion and
+the pane doesn't composite): 32 pieces render with the correct per-type counts (16 pawns,
+4/4/4 minor+rook, 2 queens, 2 kings), 16 white / 16 black; the piece and dice overlays
+are pixel-aligned to the board; each die is 0.69× a square with six faces and a correct
+pip layout and lands on a valid 1–6 face; the `diceThrow` trajectory samples as a
+fly-in → overshoot → skip → 9px bounce → 3px bounce → rest; the splash builds with no JS
+errors and removes itself cleanly, leaving the menu visible.
 
 ## Phase 6 — next
 
