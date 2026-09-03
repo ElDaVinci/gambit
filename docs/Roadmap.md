@@ -290,6 +290,36 @@ path is untouched. The `ambient` declaration itself is a Safari-only API and cou
 observed here — Chrome has no `navigator.audioSession`, and both test browsers report a
 0×0 viewport so no trusted tap could be dispatched.
 
+## A wrong puzzle move no longer resets by itself ✅ DONE (v20)
+
+A move that missed printed a verdict and then a `setTimeout` wiped the position 2.2 s
+later. You lost the board before you had finished looking at it, and the restart was the
+app's decision rather than yours. All three auto-reset timers are gone. Now:
+
+- The **position stays exactly as you left it.** The square the piece came from is tinted
+  red (`.sq.missFrom`), the square it landed on is ringed red (`.sq.missTo`).
+- The board **freezes** — no second move can be played into a dead line.
+- The coach names the mistake *and why*, without ever naming the answer.
+- **Retry becomes the primary button**; Skip drops to secondary. Nothing happens until
+  the player presses one.
+
+The freeze is a dedicated `puzzleFrozen()` predicate, deliberately **not** the `busy`
+flag: `checkPuzzle` runs from inside `pushHistory`, which `finalize()` calls *before* its
+own `busy=false`, so anything set there is overwritten a few lines later. That was a real
+bug caught in testing — the first version set `busy=true` and the board stayed live.
+
+`gradeMove` now appends a concrete reason built from the position the played move actually
+produced, in priority order: (1) the moved piece can be captured where it now stands,
+(2) the move left another piece hanging that was safe before, (3) it simply is not
+forcing. It describes the *consequence*, never the solution.
+
+Verified against the engine on all 6 puzzles across all 3 difficulties: every wrong move
+halts in `state:"wrong"`, marks the correct two squares, and freezes all 64 squares
+(0 pickable); the position is unchanged 6 s later; Retry restores a clean playable puzzle
+(red cleared, 12 pickable, Hint re-enabled); the correct move still reaches `"solved"`
+with no red squares. The "can be taken on f7" claim was cross-checked through move
+generation rather than `isAttacked` — Black really does have `Rf8xf7`.
+
 ## Phase 6 — next
 
 - **Playtest.** Does the 50/50-everything feel good, or too swingy? Tune from real games.

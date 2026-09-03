@@ -323,6 +323,16 @@ body{
   box-shadow:inset 0 0 0 4px var(--brass);border-radius:2px;
   animation:hintPulse 1.1s ease-in-out infinite}
 @keyframes hintPulse{0%,100%{opacity:.55}50%{opacity:1}}
+/* A rejected puzzle move: the square it came from is tinted, the square it
+   landed on is ringed red. The board is frozen until the player hits Retry —
+   the position stays up so the mistake can actually be looked at. */
+.sq.missFrom::after{content:"";position:absolute;inset:0;z-index:2;
+  background:rgba(209,90,75,.22)}
+.sq.missTo::after{content:"";position:absolute;inset:0;z-index:3;
+  box-shadow:inset 0 0 0 4px var(--repel);border-radius:2px;
+  animation:missPulse 1.3s ease-in-out 3}
+@keyframes missPulse{0%,100%{opacity:.62}50%{opacity:1}}
+@media (prefers-reduced-motion:reduce){ .sq.missTo::after{animation:none;opacity:1} }
 
 /* ---- player cards (opponent above the board, you below) ---- */
 .playerCard{display:flex;align-items:center;gap:9px;padding:7px 10px;min-height:46px;
@@ -703,7 +713,8 @@ details.rules .body li{margin:3px 0}
             <button class="pzLvl"    data-lvl="hard"   type="button">Hard</button>
           </div>
           <p class="pzNote" id="pzNote">The dice apply here too &mdash; find the right move,
-            then win the roll. Lose it and the puzzle simply starts again.</p>
+            then win the roll. A move that misses is marked in red and explained;
+            the board waits for you to press Retry.</p>
         </div>
         <p class="setGroup" id="setGroupGame">Game</p>
         <label class="switch"><span>Dark theme</span>
@@ -1765,6 +1776,8 @@ function render(){
     if(dragState && dragState.from===i) cell.classList.add("dragSource");
     if(dragState && dragState.targets[i]) cell.classList.add("dropTarget");
     if(hintSq===i) cell.classList.add("hintFrom");
+    if(missFrom===i) cell.classList.add("missFrom");
+    if(missTo===i) cell.classList.add("missTo");
     if(targetTo[i]==="move") inner+='<span class="move-dot"></span>';
     if(targetTo[i]==="cap") inner+='<span class="capture-ring"></span>';
     // coordinates only along the two visible edges, as chess apps do
@@ -1772,10 +1785,10 @@ function render(){
     if(d%8===0) inner+='<span class="coord rank">'+(8-r)+'</span>';
     cell.innerHTML=inner;
 
-    var mine = !reviewing() && pc && pc[0]===state.turn && !gameOver && !busy;
+    var mine = !reviewing() && pc && pc[0]===state.turn && !gameOver && !busy && !puzzleFrozen();
     var hasMoves = mine && legalCache.some(function(m){return m.from===i;});
     if(hasMoves || (sel!=null && targetTo[i])) cell.classList.add("pickable");
-    cell.disabled = gameOver || busy || reviewing();
+    cell.disabled = gameOver || busy || reviewing() || puzzleFrozen();
     cell.setAttribute("aria-label", sqName(i)+(pc?(" "+NAME_COLOR(pc[0])+" "+NAME[pc[1]]):" empty"));
   }
   renderStatus();
@@ -2095,7 +2108,7 @@ function squareIndexFromPoint(x,y){
 
 function onPointerDown(e){
   suppressClick=-1;
-  if(busy||gameOver||e.button===1||e.button===2) return;
+  if(busy||gameOver||puzzleFrozen()||e.button===1||e.button===2) return;
   var i=parseInt(this.dataset.i,10);
   var pc=state.board[i];
   if(!pc || pc[0]!==state.turn) return;
@@ -2174,7 +2187,7 @@ function playMove(from, to){
 
 /* ================= interaction ================= */
 function onSquareClick(e){
-  if(busy||gameOver) return;
+  if(busy||gameOver||puzzleFrozen()) return;
   audio();                       // first user gesture — unlock sound
   var i=parseInt(this.dataset.i,10);
   if(suppressClick===i){ suppressClick=-1; return; }
@@ -2405,6 +2418,14 @@ var training=false, lessonIdx=0, lessonDone=false;
 var trainTab="rules";
 var puzzleLvl="easy", puzzleIdx=0, puzzleStep=0;
 var puzzleActive=false, puzzleState="", hintSq=-1;
+/* Squares of a rejected move, kept on screen (red) until the player retries. */
+var missFrom=-1, missTo=-1;
+/* A halted puzzle freezes the board. This is deliberately NOT the `busy` flag:
+   checkPuzzle runs from inside pushHistory, which finalize() calls before its
+   own `busy=false`, so anything set there is immediately overwritten. */
+function puzzleFrozen(){
+  return puzzleActive && (puzzleState==="wrong" || puzzleState==="unlucky");
+}
 function puzzleList(){ return PUZZLES[puzzleLvl]||[]; }
 function currentPuzzle(){ return puzzleList()[puzzleIdx]; }
 
@@ -2425,6 +2446,7 @@ function startTraining(){
 }
 function stopTraining(){
   training=false; lessonDone=false; puzzleActive=false; hintSq=-1;
+  missFrom=-1; missTo=-1;
   document.getElementById("trainBar").hidden=true;
   document.getElementById("trainActions").hidden=true;
   document.getElementById("rail").hidden=false;
@@ -2511,23 +2533,50 @@ function gradeMove(h, want){
     lastGrade={gap:Math.round(gap), vPlayed:Math.round(vPlayed),
                vAlt:Math.round(vAlt), mate:mateWasThere, moves:ms.length};
 
+    /* A concrete reason beats a verdict. Look at the position the played move
+       actually produced and name what is wrong with it — never what the answer
+       is. Deliberately says nothing about which piece or square to use. */
+    function why(){
+      var res=applyMove(st, mPlayed, true);
+      var nb=res.board, me=st.turn, them=opp(me);
+      var moved=nb[mPlayed.to];
+      // 1. the piece just moved can be taken where it stands
+      if(moved && isAttacked(nb, rowOf(mPlayed.to), colOf(mPlayed.to), them)){
+        var nm = NAME[moved[1]].toLowerCase();
+        return "Your "+nm+" can be taken on "+sqName(mPlayed.to)+" — and in this game you "
+             + "only get the piece back if the dice go your way.";
+      }
+      // 2. it walked away from a defended piece and left something else hanging
+      for(var s=0;s<64;s++){
+        var p=nb[s];
+        if(!p || p[0]!==me || p[1]==="k" || s===mPlayed.to) continue;
+        if(!isAttacked(nb, rowOf(s), colOf(s), them)) continue;
+        if(isAttacked(st.board, rowOf(s), colOf(s), them)) continue;   // already was
+        return "It leaves your "+NAME[p[1]].toLowerCase()+" on "+sqName(s)+" undefended.";
+      }
+      // 3. nothing hangs — it is simply not forcing
+      return "It gives the opponent a free move to untangle.";
+    }
+    var reason;
+    try{ reason=why(); }catch(e){ reason="It lets the opponent off the hook."; }
+
     /* Bands measured against real tries in these positions: sound moves such as
        Nc3, Bxf7+ and a3 score 183-233 below the best alternative, while hanging
        the queen scores 363. The dice compress every value, so the thresholds sit
        tighter than a plain chess engine's would. */
     if(mateWasThere){
       if(gap<260) return {label:"Missed the mate",
-        note:"A perfectly sound move — but there is forced mate in this position."};
+        note:"A perfectly sound move — but there is a forced mate here, and this is not it. "+reason};
       if(gap<340) return {label:"Missed the mate",
-        note:"There was forced mate here, and this concedes ground as well."};
+        note:"There was forced mate here, and this concedes ground as well. "+reason};
       return {label:"Blunder",
-        note:"This drops material, and mate was available. Look again."};
+        note:"Mate was available and this drops material instead. "+reason};
     }
-    if(gap<80)   return {label:"Almost", note:"A reasonable move, but there is something stronger."};
-    if(gap<260)  return {label:"Inaccuracy", note:"Playable, yet it lets the win slip away."};
-    if(gap<340)  return {label:"Mistake", note:"That misses the point of the position."};
-    return {label:"Blunder", note:"That gives material away. Look again."};
-  }catch(e){ return {label:"Not the move", note:"Try again."}; }
+    if(gap<80)   return {label:"Almost", note:"A reasonable move, but something is stronger. "+reason};
+    if(gap<260)  return {label:"Inaccuracy", note:"Playable, yet it lets the win slip away. "+reason};
+    if(gap<340)  return {label:"Mistake", note:"That misses the point of the position. "+reason};
+    return {label:"Blunder", note:"That gives material away. "+reason};
+  }catch(e){ return {label:"Not the move", note:"That is not the idea here — look at the position again."}; }
 }
 function loadPuzzle(i){
   var list=puzzleList();
@@ -2535,6 +2584,7 @@ function loadPuzzle(i){
   puzzleIdx=Math.max(0, Math.min(list.length-1, i));
   var P=list[puzzleIdx];
   puzzleStep=0; puzzleState="opening"; hintSq=-1; puzzleGrade=null;
+  missFrom=-1; missTo=-1;
   newGame(true);
   state.board=P.board.slice();
   state.turn = "b";                      // the opponent moves first
@@ -2576,10 +2626,12 @@ function renderPuzzle(){
     msg=P.theme+". Well found."; cls+=" done"; }
   else if(puzzleState==="wrong"){
     title.textContent = puzzleGrade ? puzzleGrade.label : "Not the move";
-    msg = puzzleGrade ? puzzleGrade.note : "Try again.";
+    msg = (puzzleGrade ? puzzleGrade.note : "That is not the idea here.")
+        + " Take a look, then press Retry when you want another go.";
     cls+=" miss"; }
   else if(puzzleState==="unlucky"){ title.textContent="The dice said no";
-    msg="Right idea — but you lost the roll. Going again."; cls+=" miss"; }
+    msg="Right idea — the roll went against you, so the line is dead. "
+      + "Press Retry to set it up again."; cls+=" miss"; }
   else {
     title.textContent="White to move";
     var left=P.solution.length-puzzleStep;
@@ -2591,7 +2643,25 @@ function renderPuzzle(){
   meta.textContent = P.theme+" · "+P.goal+" · Puzzle "+(puzzleIdx+1)+" of "+list.length;
 
   document.getElementById("pzHint").disabled = puzzleState!=="solving";
-  document.getElementById("pzNext").textContent = puzzleState==="solved" ? "Next" : "Skip";
+  /* While the puzzle is halted, Retry is the move the player is meant to make,
+     so it carries the primary styling instead of Next/Skip. */
+  var halted = (puzzleState==="wrong" || puzzleState==="unlucky");
+  var retry=document.getElementById("pzRetry"), next=document.getElementById("pzNext");
+  retry.className = "btn " + (halted ? "primary" : "rvGhost");
+  next.className  = "btn " + (halted ? "rvGhost" : "primary");
+  next.textContent = puzzleState==="solved" ? "Next" : "Skip";
+}
+/* Stop the puzzle on a rejected move. The position stays exactly as the player
+   left it, the two squares are marked red, and the board is frozen so nothing
+   can be played on from a dead line. It does NOT reset — the player restarts
+   with Retry when they have finished looking at it. */
+function haltPuzzle(stateName, from, to){
+  puzzleState=stateName; hintSq=-1;
+  missFrom=(from==null?-1:from); missTo=(to==null?-1:to);
+  selected=null;                  // puzzleFrozen() now freezes every square
+  renderPuzzle(); render();
+  /* "unlucky" already made its noise during the battle — don't double up. */
+  if(stateName==="wrong") sndRepel();
 }
 /* Judge the player's move against the solution, then play the scripted reply. */
 function checkPuzzle(h){
@@ -2606,11 +2676,10 @@ function checkPuzzle(h){
   if(puzzleState!=="solving") return;
   if(h.color!=="w"){
     /* The opponent's scripted answer can itself be repelled by the dice, which
-       leaves a position the rest of the line no longer fits. Start over. */
+       leaves a position the rest of the line no longer fits. Nothing to do but
+       start over — but the player decides when, not a timer. */
     if(h.capture && !h.success){
-      puzzleState="unlucky"; hintSq=-1;
-      renderPuzzle(); render();
-      setTimeout(function(){ if(puzzleActive) loadPuzzle(puzzleIdx); }, 2100);
+      haltPuzzle("unlucky", h.from, h.to);
     }
     return;
   }
@@ -2626,17 +2695,13 @@ function checkPuzzle(h){
       return;
     }
     puzzleGrade = gradeMove(h, want);
-    puzzleState="wrong"; hintSq=-1;
-    renderPuzzle(); render();
-    setTimeout(function(){ if(puzzleActive) loadPuzzle(puzzleIdx); }, 2200);
+    haltPuzzle("wrong", h.from, h.to);
     return;
   }
   /* Right move, wrong roll. The dice are live in puzzles too, so a correct
      idea can still be repelled — which is the whole point of this game. */
   if(h.capture && !h.success){
-    puzzleState="unlucky"; hintSq=-1;
-    renderPuzzle(); render();
-    setTimeout(function(){ if(puzzleActive) loadPuzzle(puzzleIdx); }, 2100);
+    haltPuzzle("unlucky", h.from, h.to);
     return;
   }
   puzzleStep++; hintSq=-1;
@@ -3148,6 +3213,14 @@ window.__G={freshState:freshState,legalMoves:legalMoves,applyMove:applyMove,opp:
             runHeroScene:function(){return runHeroScene();},reducedMotion:function(){return reduced;},
             PUZZLES:PUZZLES,sqi:sqi,HERO_SCENES:HERO_SCENES,
             lastGrade:function(){return lastGrade;},
+            /* Puzzle plumbing, for driving the trainer without a pointer. */
+            startTraining:startTraining,setTrainTab:setTrainTab,
+            loadPuzzle:loadPuzzle,currentPuzzle:currentPuzzle,commit:commit,
+            puzzleInfo:function(){
+              return {state:puzzleState, step:puzzleStep, idx:puzzleIdx,
+                      missFrom:missFrom, missTo:missTo, busy:busy, hintSq:hintSq,
+                      grade:puzzleGrade};
+            },
             /* Maps the 3x3 onto a real board and asks the move generator whether
                each menu capture is a move that piece could actually make. */
             checkHeroScenes:function(){
