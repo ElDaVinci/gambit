@@ -261,6 +261,35 @@ pip layout and lands on a valid 1–6 face; the `diceThrow` trajectory samples a
 fly-in → overshoot → skip → 9px bounce → 3px bounce → rest; the splash builds with no JS
 errors and removes itself cleanly, leaving the menu visible.
 
+## Sound no longer stops the player's music ✅ DONE (v19)
+
+Starting a game killed whatever the player had playing (Spotify, Apple Music, a podcast).
+Two things from the earlier "I can't hear any sound" fix were responsible, and both were
+doing the same thing for the same reason — claiming the device's audio session:
+
+1. `navigator.audioSession.type = "playback"` declares the page to be **primary media
+   playback**, which is an instruction to iOS to interrupt everything else.
+2. A silent, **looping** `<audio>` keepalive element ran for the whole session. A media
+   element that is *playing* holds the audio session even when its samples are all zero —
+   that was the older-iOS fallback for the same silent-switch problem.
+
+Now the game declares **`type = "ambient"`** — the mixing category — and creates no media
+element at all (pure Web Audio). The session is claimed at script load *and* immediately
+before the `AudioContext` is constructed, because on iOS the category is fixed at context
+creation time; setting it afterwards is too late.
+
+**The tradeoff, stated plainly:** iOS honours the physical ring/silent switch for
+`ambient` sessions. With the switch on silent the game is now quiet — which is exactly
+how every other app that mixes behaves, and is the price of not interrupting. Reverting
+is a one-word change (`"ambient"` → `"playback"`), at the cost of stopping music again.
+
+Verified: no `new Audio(...)`, no media elements, and no `"playback"` session type remain
+anywhere in the file; the audio graph still builds and runs (`AudioContext` reaches
+`state: "running"` with the master gain connected, nothing thrown). The gesture-unlock
+path is untouched. The `ambient` declaration itself is a Safari-only API and could not be
+observed here — Chrome has no `navigator.audioSession`, and both test browsers report a
+0×0 viewport so no trusted tap could be dispatched.
+
 ## Phase 6 — next
 
 - **Playtest.** Does the 50/50-everything feel good, or too swingy? Tune from real games.
