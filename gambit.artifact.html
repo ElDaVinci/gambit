@@ -54,8 +54,9 @@
 }
 
 /* ================= opening animation =================
-   The board tiles in square by square, the back rank drops onto it, then the
-   wordmark resolves. Skippable, and skipped entirely under reduced-motion. */
+   The board tiles in square by square, the full 32-piece starting position
+   drops onto it rank by rank, three dice tumble down and settle on faces, then
+   the wordmark resolves. Skippable, and skipped entirely under reduced-motion. */
 .splash{position:fixed;inset:0;z-index:200;display:grid;place-items:center;
   background:var(--bg);transition:opacity .45s ease, visibility .45s}
 .splash.done{opacity:0;visibility:hidden;pointer-events:none}
@@ -67,9 +68,21 @@
    .animate. Never rely on animation-fill-mode to REACH the visible state: if
    animations are disabled or cut short, the splash would stay blank. */
 .splashBoard i{display:block;aspect-ratio:1}
-.splashRank{position:absolute;top:0;width:min(62vw,232px);
-  display:grid;grid-template-columns:repeat(8,1fr);height:calc(min(62vw,232px)/8)}
-.splashRank svg{width:100%;height:100%}
+/* Piece overlay: a full 8x8 grid sitting exactly on the board, holding all 32
+   starting pieces (empty cells are bare <i> spacers). */
+.splashRank{position:absolute;top:0;left:50%;transform:translateX(-50%);
+  width:min(62vw,232px);height:min(62vw,232px);pointer-events:none;
+  display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr)}
+.splashRank svg{width:100%;height:100%;padding:9%}
+.splashRank i{display:block}
+/* Dice layer: same footprint as the board; each die is centred on a square via
+   left/top percentages and a negative margin of half its size. */
+.splashDice{position:absolute;top:0;left:50%;transform:translateX(-50%);
+  width:min(62vw,232px);height:min(62vw,232px);pointer-events:none}
+.splashDie{position:absolute;width:34px;height:34px;margin:-17px 0 0 -17px;
+  perspective:440px;transform-style:preserve-3d}
+.splashDie .dieBox{--half:17px;width:34px;height:34px}
+.splashDie .dieShadow{top:35px;width:28px;opacity:.5}
 .splashMark{font-family:"Zilla Slab",Georgia,serif;font-weight:700;
   font-size:clamp(30px,9vw,44px);letter-spacing:.01em;margin:20px 0 0;color:var(--ink)}
 .splashSub{margin:5px 0 0;font-size:12.5px;letter-spacing:.05em;color:var(--muted)}
@@ -78,8 +91,10 @@
   animation:tileIn .42s cubic-bezier(.2,.9,.3,1) forwards}
 .splash.animate .splashRank svg{opacity:0;transform:translateY(-26px);
   animation:dropIn .5s cubic-bezier(.24,1.2,.4,1) forwards}
-.splash.animate .splashMark{opacity:0;animation:markIn .55s ease-out .95s forwards}
-.splash.animate .splashSub{opacity:0;animation:markIn .55s ease-out 1.15s forwards}
+.splash.animate .splashDie{opacity:0;animation:diceFall .6s cubic-bezier(.2,.85,.3,1) forwards}
+.splash.animate .splashDie .dieShadow{opacity:0;animation:shadowIn .3s ease-out forwards}
+.splash.animate .splashMark{opacity:0;animation:markIn .55s ease-out 1.5s forwards}
+.splash.animate .splashSub{opacity:0;animation:markIn .55s ease-out 1.7s forwards}
 .splashSkip{position:absolute;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));
   font:inherit;font-size:12px;color:var(--muted);background:none;border:0;
   padding:8px 10px;cursor:pointer;letter-spacing:.06em;text-transform:uppercase}
@@ -87,6 +102,16 @@
 @keyframes tileIn{to{opacity:1;transform:none}}
 @keyframes dropIn{to{opacity:1;transform:none}}
 @keyframes markIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+/* The cube itself tumbles via rollDie() + the .dieBox transition; this only
+   drops the wrapper in and gives it a small bounce on landing. */
+@keyframes diceFall{
+  0%{opacity:0;transform:translateY(-165px)}
+  55%{opacity:1}
+  80%{transform:translateY(5px)}
+  100%{opacity:1;transform:translateY(0)}
+}
+@keyframes shadowIn{from{opacity:0;transform:translateX(-50%) scaleX(1.5)}
+  to{opacity:.5;transform:translateX(-50%) scaleX(1)}}
 
 *{box-sizing:border-box}
 html,body{margin:0}
@@ -599,11 +624,12 @@ details.rules .body li{margin:3px 0}
   *{animation-duration:.001ms !important;transition-duration:.001ms !important}
 }
 </style>
-<!-- opening animation: the board assembles, the back rank drops in, a die lands -->
+<!-- opening animation: the board assembles, all 32 pieces drop in, dice tumble down and land -->
 <div class="splash" id="splash">
   <div class="splashInner">
     <div class="splashBoard" id="splashBoard" aria-hidden="true"></div>
     <div class="splashRank" id="splashRank" aria-hidden="true"></div>
+    <div class="splashDice" id="splashDice" aria-hidden="true"></div>
     <h1 class="splashMark">Gambit</h1>
     <p class="splashSub">every capture is a roll of the dice</p>
   </div>
@@ -3023,17 +3049,51 @@ document.addEventListener("keydown", function(e){
   }
   b.innerHTML=html;
 
-  // the back rank drops onto it once the tiles have landed
-  var order=["r","n","b","q","k","b","n","r"], rank="";
-  for(var i=0;i<8;i++){
-    rank+=pieceSVG("w",order[i]).replace("<svg ",
-      '<svg style="animation-delay:'+(430+i*55)+'ms" ');
+  // the full 32-piece starting position drops onto it once the tiles have
+  // landed. Rows 0-1 are Black, rows 6-7 White; rows 2-5 are empty spacers.
+  // Both back ranks land first, then both pawn ranks in front of them.
+  var back=["r","n","b","q","k","b","n","r"], cells="";
+  for(var rr=0;rr<8;rr++){
+    var isBack = rr===0||rr===7, isPawn = rr===1||rr===6;
+    var col = (rr<=1) ? "b" : "w";
+    var rankWave = isBack ? 0 : 1;
+    for(var cc=0;cc<8;cc++){
+      if(isBack || isPawn){
+        var ty = isBack ? back[cc] : "p";
+        var delay = 430 + rankWave*150 + cc*22;
+        cells += pieceSVG(col, ty).replace("<svg ",
+          '<svg style="animation-delay:'+delay+'ms" ');
+      } else {
+        cells += "<i></i>";
+      }
+    }
   }
-  document.getElementById("splashRank").innerHTML=rank;
+  document.getElementById("splashRank").innerHTML=cells;
 
-  if(reduced){ setTimeout(close, 550); return; }   // show it, just don't animate
+  // three dice tumble down onto the board and settle on random faces
+  var dice=document.getElementById("splashDice");
+  var spots=[[4,2],[3,5],[5,5]];          // [row,col] on the 8x8 board
+  var diceBase=980;
+  spots.forEach(function(sp,i){
+    var wrap=document.createElement("div"); wrap.className="splashDie";
+    wrap.style.left=((sp[1]+0.5)/8*100)+"%";
+    wrap.style.top =((sp[0]+0.5)/8*100)+"%";
+    var box=document.createElement("div"); box.className="dieBox";
+    var sh =document.createElement("div"); sh.className="dieShadow";
+    buildDie(box);
+    wrap.appendChild(sh); wrap.appendChild(box);
+    var d=diceBase+i*175;
+    wrap.style.animationDelay=d+"ms";
+    sh.style.animationDelay=(d+380)+"ms";
+    dice.appendChild(wrap);
+    var v=1+Math.floor(Math.random()*6);
+    if(reduced){ box.style.transition="none"; rollDie(box, v, 0); }
+    else { setTimeout(function(){ rollDie(box, v, 3+i); }, d); }
+  });
+
+  if(reduced){ setTimeout(close, 650); return; }   // show it, just don't animate
   el.classList.add("animate");
-  setTimeout(close, 2150);
+  setTimeout(close, 2950);
 })();
 
 buildBoard();

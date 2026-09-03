@@ -227,6 +227,28 @@ move was illegal once the blocker arrived.
   Now full-size with padding, so one `-100%` is exactly one square — measured landing
   error is 0%.
 
+## Opening animation — full board + dice ✅ DONE (v17)
+
+The splash used to drop in only the white back rank — eight pieces on an otherwise
+empty board. It now assembles the **full 32-piece starting position**: `#splashRank`
+became a full 8×8 grid overlay pixel-aligned to the tile board (empty middle squares are
+bare `<i>` spacers), so both back ranks drop in first, then both pawn ranks in front of
+them, each rank staggered across its files.
+
+A new `#splashDice` layer drops **three dice** onto the board. They reuse the battle
+overlay's `buildDie` / `rollDie` machinery at `--half:17px`; each wrapper falls in on a
+`diceFall` keyframe while the cube itself tumbles via its `.dieBox` transition and settles
+on a random face (`rollDie(box, v, 3+i)`). Under `prefers-reduced-motion` the dice are
+placed statically on their faces and the whole splash is shown un-animated, as before.
+
+Verified by DOM measurement (screenshots and the animated path are both untestable in
+this environment — the browsers force reduced-motion and the pane doesn't composite):
+32 pieces render with the correct per-type counts (16 pawns, 4/4/4 minor+rook, 2 queens,
+2 kings), 16 white / 16 black; the piece and dice overlays are pixel-aligned to the
+board; all three dice carry six faces with the correct pip layout and land on valid
+1–6 faces; the splash builds with no JS errors and removes itself cleanly, leaving the
+menu visible.
+
 ## Phase 6 — next
 
 - **Playtest.** Does the 50/50-everything feel good, or too swingy? Tune from real games.
