@@ -22,7 +22,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
 /* ============================================================ GAMBIT
-   Dice Chess — standard chess, but every capture is a 1d6 vs 1d6 battle.
+   Dice Chess — standard chess, but every capture is decided by a dice battle.
    Single self-contained file. Vanilla JS. Works desktop + mobile.
    ============================================================ */
 
@@ -225,6 +225,15 @@ body{
    extra class to win — otherwise the hero dice inherit the overlay's 64px. */
 .heroRoll .dieWrap,.heroRoll .dieBox{width:52px;height:52px;--half:26px}
 .heroRoll .dieShadow{width:42px;top:57px}
+/* A die must never be allowed to shrink: flex items shrink below their stated
+   width by default, and when the Queen's third die arrived the row silently
+   crushed one to zero rather than overflowing. Fixed size, then scale the whole
+   row down for a three-die attacker so it still fits beside the mini board. */
+.heroRoll .dieWrap{flex:0 0 auto}
+.heroRoll[data-atk="3"] .heroSide{gap:6px}
+.heroRoll[data-atk="3"] .dieWrap,
+.heroRoll[data-atk="3"] .dieBox{width:42px;height:42px;--half:21px}
+.heroRoll[data-atk="3"] .dieShadow{width:34px;top:46px}
 .heroVs{font-family:"Zilla Slab",Georgia,serif;font-size:13px;color:var(--muted);
   letter-spacing:.08em}
 .heroVerdict{margin:16px 0 0;font-family:"Zilla Slab",Georgia,serif;font-weight:700;
@@ -240,6 +249,10 @@ body{
   .heroBoard{width:104px}
   .heroRoll .dieWrap,.heroRoll .dieBox{width:44px;height:44px;--half:22px}
   .heroRoll .dieShadow{width:36px;top:48px}
+  .heroRoll[data-atk="3"] .heroSide{gap:5px}
+  .heroRoll[data-atk="3"] .dieWrap,
+  .heroRoll[data-atk="3"] .dieBox{width:32px;height:32px;--half:16px}
+  .heroRoll[data-atk="3"] .dieShadow{width:26px;top:35px}
   .heroStage{gap:16px}
   .heroVerdict{margin-top:12px;font-size:15px}
   .heroCaption{font-size:12.5px}
@@ -641,12 +654,21 @@ details.rules .body li{margin:3px 0}
   text-transform:uppercase;color:var(--muted);text-align:center;margin-top:22px}
 .dieSide{display:flex;flex-direction:column;align-items:center}
 .dieRow{display:flex;gap:12px;align-items:flex-start}
+/* Three attacking dice (the Queen) have to sit beside the defender's die inside
+   a 360px panel. At the default 64px that row alone is 216px and the whole
+   group overflows, so a three-die row scales itself down. Keyed on the count
+   rather than a breakpoint — it is the die count that causes the overflow. */
+.dieRow[data-n="3"]{gap:8px}
+.dieRow[data-n="3"] .dieWrap,
+.dieRow[data-n="3"] .dieBox{width:46px;height:46px;--half:23px}
+.dieRow[data-n="3"] .dieShadow{top:50px;width:38px}
+.dieSide.winner .dieRow[data-n="3"] .dieWrap:not(.ignored) .dieShadow{width:48px;height:9px}
 /* The perspective must sit on the cube's DIRECT parent: anything in between
    flattens the 3D context and collapses a die rotated 90deg (values 2 and 5). */
 .dieWrap{position:relative;width:64px;height:64px;
   perspective:520px;transform-style:preserve-3d}
-/* When the Queen attacks she rolls two and keeps the higher; the one that
-   does not count fades back so the deciding die is unmistakable. */
+/* An attacker rolling two or three keeps only its highest; the dice that do
+   not count fade back so the deciding one is unmistakable. */
 .dieWrap.ignored{opacity:.34}
 .dieWrap.counts .dieShadow{background:color-mix(in srgb,var(--brass) 70%,transparent)}
 /* Winner marked on the shadow and label — deliberately NOT with a filter on the
@@ -920,8 +942,12 @@ details.rules .body li{margin:3px 0}
     <template id="rulesText">
       <ul>
         <li>Movement, check, castling, en&nbsp;passant, promotion &mdash; all standard.</li>
-        <li>A capture is a <strong>battle</strong>: attacker rolls 1d6, defender rolls 1d6, higher wins, ties re-roll &rarr; 50/50.</li>
-        <li>The <strong>Queen rolls two dice when she attacks</strong> and keeps the higher &mdash; about <strong>69%</strong>. She still defends with one, so she is no harder to kill.</li>
+        <li>A capture is a <strong>battle</strong>: both sides roll, each keeps its
+          <strong>highest single die</strong>, higher wins, ties re-roll.</li>
+        <li><strong>Attacking dice go by piece</strong> &mdash; Queen&nbsp;3, Rook / Bishop / Knight&nbsp;2,
+          Pawn&nbsp;1. That is <strong>79%</strong>, <strong>69%</strong> and <strong>50%</strong> to the attacker.</li>
+        <li>The <strong>defender always rolls one die</strong>, whatever it is. Extra dice make a
+          piece better at attacking, never harder to kill.</li>
         <li>Attacker wins &rarr; normal capture. Attacker loses &rarr; <strong>the attacking piece is removed</strong>; the defender holds its square.</li>
         <li>The King never rolls. A King capturing a piece succeeds automatically.</li>
         <li>While your King is in check you keep moving &mdash; risking further pieces if you choose &mdash; until it is safe, or it is checkmate.</li>
@@ -1373,18 +1399,24 @@ function sndEnd(win){
 }
 
 /* ================= how many dice each side rolls =================
-   Everything rolls one die, except the Queen, who rolls two when she attacks
-   and takes the higher — she still defends with one. Higher single die wins;
-   ties re-roll. Taking the higher (not the sum) is what keeps this an edge
-   rather than a certainty: best-of-two wins 69.4%, summing would win 90%. */
-var ATK_DICE={q:2};          // attacker dice by piece type, default 1
-var DEF_DICE={};             // defender dice by piece type, default 1
+   Attacking dice are ranked by piece: Queen 3, Rook/Bishop/Knight 2, Pawn 1.
+   The DEFENDER always rolls exactly one, whatever it is. Each side keeps its
+   single highest die, higher wins, ties re-roll.
+
+   Resulting attacker win rates (exact, ties re-rolled away):
+     Pawn attacking .................. 50.0 %
+     Knight / Bishop / Rook attacking  69.4 %
+     Queen attacking ................. 79.2 %
+   Taking the HIGHER and not the sum is what keeps these edges rather than
+   certainties — summing 3d6 against 1d6 would win about 98%. */
+var ATK_DICE={q:3, r:2, b:2, n:2};   // attacker dice by piece type, default 1
+var DEF_DICE={};                     // defender always rolls one
 function atkDice(t){ return ATK_DICE[t]||1; }
 function defDice(t){ return DEF_DICE[t]||1; }
 
 /* Exact probability the attacker wins once ties are re-rolled away, for any
-   dice counts. The bot's expectiminimax needs this — with the queen no longer
-   at 50/50 a hardcoded 0.5 would make it misjudge every queen capture. */
+   dice counts. The bot's expectiminimax needs this — with only pawns left at
+   50/50, a hardcoded 0.5 would misjudge nearly every capture on the board. */
 var _winCache={};
 function winChance(nA, nD){
   var key=nA+"x"+nD;
@@ -1459,6 +1491,7 @@ function battle(atkType, atkColor, defType, defColor, atSq){
        which is what carries the perspective. */
     function buildSide(row, n){
       row.innerHTML="";
+      row.dataset.n=n;          // drives the size of a three-die row (see CSS)
       var boxes=[];
       for(var i=0;i<n;i++){
         var w=document.createElement("div"); w.className="dieWrap";
@@ -2041,8 +2074,9 @@ function moveValue(st, mv, depth, alpha, beta){
   if(!isBattle) return afterMove(st, mv, true, depth, alpha, beta);
   var won  = afterMove(st, mv, true,  depth, -Infinity, Infinity);
   var lost = afterMove(st, mv, false, depth, -Infinity, Infinity);
-  /* Weight by this matchup's real odds, not a flat half: the Queen attacks at
-     69.4%, and assuming 50% would make the bot undervalue every queen capture. */
+  /* Weight by this matchup's real odds, not a flat half: only a pawn attacks at
+     50%. A knight, bishop or rook is 69.4% and the queen 79.2%, so a flat 0.5
+     would make the bot undervalue nearly every capture it can make. */
   var victim = mv.ep ? "p" : st.board[mv.to][1];
   var p = captureOdds(st.board[mv.from][1], victim);
   return p*won + (1-p)*lost;
@@ -2328,7 +2362,8 @@ var LESSONS=[
   {
     title:"A capture is a fight",
     text:"This is the one rule that changes. You do not simply take a piece — you attack it, "+
-         "and both sides roll a die. Higher wins, ties re-roll. Straight 50/50.",
+         "and both sides roll. Each keeps its highest die, higher wins, ties re-roll. A pawn "+
+         "rolls one, so this attack is a straight 50/50.",
     task:"Take the black pawn on d5 with your pawn on e4.",
     goal:function(h){ return h.capture; },
     turn:"w",
@@ -2347,11 +2382,12 @@ var LESSONS=[
                       "....P...", "........", "........", "....K..."])
   },
   {
-    title:"The Queen attacks with two dice",
-    text:"The Queen is the one exception. Attacking, she rolls two dice and keeps the higher "+
-         "— about 69% instead of 50%. Defending she rolls one, like everyone else, so she is "+
-         "better at taking pieces but no harder to kill.",
-    task:"Capture the rook with your queen and watch both dice.",
+    title:"Big pieces attack with more dice",
+    text:"How many dice you roll to ATTACK depends on the piece: Queen three, Rook, Bishop "+
+         "and Knight two, Pawn one. You keep the highest — that is 79%, 69% and 50%. "+
+         "Defending, every piece rolls exactly one die, so extra dice make a piece better at "+
+         "taking, never harder to kill.",
+    task:"Capture the rook with your queen and watch all three dice.",
     goal:function(h){ return h.capture && h.piece==="q"; },
     turn:"w",
     board:fromLayout(["....k...", "........", "........", "...r....",
@@ -2789,7 +2825,7 @@ function buildMenuArt(){
 var HERO_SCENES=[
   {atk:["w","n"], def:["b","p"], from:7, to:2},   // knight: L-shape
   {atk:["b","r"], def:["w","b"], from:1, to:7},   // rook: down the file
-  {atk:["w","q"], def:["b","r"], from:6, to:2},   // queen: long diagonal, two dice
+  {atk:["w","q"], def:["b","r"], from:6, to:2},   // queen: long diagonal, three dice
   {atk:["w","p"], def:["b","n"], from:7, to:5},   // pawn: diagonal capture only
   {atk:["b","b"], def:["w","n"], from:0, to:8},   // bishop: corner to corner
   {atk:["w","r"], def:["b","b"], from:3, to:5}    // rook: across the rank
@@ -2840,6 +2876,7 @@ function runHeroScene(){
 
   heroSquares(scene);
   var nA=atkDice(scene.atk[1]), nD=defDice(scene.def[1]);
+  document.querySelector(".heroRoll").dataset.atk=nA;   // sizes a three-die row
   var boxesA=heroBuildDice(document.getElementById("heroAtkDice"), nA);
   var boxesD=heroBuildDice(document.getElementById("heroDefDice"), nD);
   V.textContent=" "; V.className="heroVerdict";

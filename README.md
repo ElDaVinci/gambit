@@ -18,8 +18,11 @@ file that runs straight off disk, no server needed.
 
 Standard chess for everything except captures. A capture is a **battle**: each side rolls
 and keeps its highest die, re-roll ties. Win → normal capture. Lose → **your attacking
-piece is removed**, defender stays. Everything rolls one die (50/50), **except the Queen,
-who rolls two when attacking and keeps the higher — about 69%. She still defends with one.** The King never rolls (classic check/checkmate; King captures auto-succeed).
+piece is removed**, defender stays. **How many dice you roll to attack depends on the
+piece — Queen 3, Rook/Bishop/Knight 2, Pawn 1 — which is 79%, 69% and 50% to the attacker.
+The defender always rolls one die, whatever it is**, so extra dice make a piece better at
+taking, never harder to kill. The King never rolls (classic check/checkmate; King captures
+auto-succeed).
 While your King is in check you keep moving — risking more pieces if you choose — until
 it's safe or it's checkmate. En passant is a battle; castling isn't; a capturing promotion
 battles first and promotes only on a win.
@@ -67,13 +70,17 @@ Turn on **Play against the computer** in the Table panel. Four strengths (Easy, 
 Hard, Master) and you can hand either colour to the bot.
 
 The engine is an **expectiminimax** search, not plain minimax — that matters here. Every
-capture is a chance node with two equally likely outcomes, so the bot plays the *expected*
-value of an attack (`EV = ½·victim − ½·attacker`). In practice it only starts a fight it
-is worth losing: it will happily throw a pawn at your queen and will not throw its queen
-at your pawn. Details and benchmarks in [`docs/Roadmap.md`](docs/Roadmap.md).
+capture is a chance node weighted by *that matchup's* real odds, so the bot plays the
+expected value of an attack (`EV = p·victim − (1−p)·attacker`, where `p` comes from the
+attacker's dice count). In practice it only starts a fight worth losing: it will happily
+throw a pawn at your queen and will not throw its queen at your pawn. Because `p` is
+derived from the dice table rather than hardcoded, retuning the dice retunes the bot
+automatically. Details and benchmarks in [`docs/Roadmap.md`](docs/Roadmap.md).
 
 ## Status
 
-**v1 playable**, hotseat or vs. computer. Chess engine is perft-verified (perft 1–4 and
-the Kiwipete position match standard chess exactly). Next up is playtesting the feel of
-50/50-on-every-capture and tuning from there — see [`docs/Roadmap.md`](docs/Roadmap.md).
+**Playable**, hotseat or vs. computer. Chess engine is perft-verified (perft 1–4 and
+the Kiwipete position match standard chess exactly). The dice ladder (Queen 3 / minor +
+rook 2 / pawn 1) is the current balance experiment and the main thing to playtest —
+attacking is now favoured for everything except pawns, so material is far less "sticky"
+than it was under the original flat 50/50. See [`docs/Roadmap.md`](docs/Roadmap.md).

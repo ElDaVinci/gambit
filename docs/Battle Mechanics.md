@@ -20,8 +20,8 @@ played as an *attempt* (§2). Consequences:
 
 Any capture — normal, en passant, or a capturing promotion — is a **battle**:
 
-1. Each side rolls its dice and keeps its **highest** single die. Everything rolls one
-   die, **except the Queen, who rolls two when she attacks** (see §2a).
+1. Each side rolls its dice and keeps its **highest** single die. The number of dice the
+   **attacker** rolls depends on the piece; the **defender always rolls one** (see §2a).
 2. Re-roll ties until one side is higher.
 3. **Attacker higher →** capture succeeds. Standard chess result: the attacker moves onto
    the square, the defender is removed.
@@ -31,37 +31,55 @@ Any capture — normal, en passant, or a capturing promotion — is a **battle**
 A capture attempt is the player's whole move for the turn, win or lose — **except while
 the player's own king is in check (§4).**
 
-Rationale for the near-flat 1d6: piece power is already expressed by mobility in the
-standard rules, so the dice deliberately do *not* re-rank the pieces. The Queen is the one
-exception (§2a) — an experiment, easily reverted.
+## 2a. Attacking dice by piece (revised 2026-09-03)
 
-## 2a. The Queen's attacking die (added 2026-08-30 — under test)
+**How many dice you roll to attack depends on the piece. The defender always rolls
+exactly one, whatever it is.** Extra dice make a piece better at *taking*, never harder
+to kill.
 
-**The Queen rolls two dice when she attacks and keeps the higher. She still defends with
-one.** She is therefore better at taking pieces but no harder to kill.
+| Attacker | dice | attacker wins |
+|---|---|---|
+| **Queen** | 3 | **79.2 %** |
+| **Rook / Bishop / Knight** | 2 | **69.4 %** |
+| **Pawn** | 1 | **50.0 %** |
+| *Any defender* | *1* | — |
+| King | — | never battles (§3) |
 
-| | attacker wins |
-|---|---|
-| Anything vs anything (1 die vs 1 die) | **50.0 %** |
-| **Queen attacking** (best of 2 vs 1) | **69.4 %** |
-| Queen *defending* | unchanged — 50 % |
+Exact values: 1 die 50 %, best-of-2 `125/216 ÷ 5/6` = 69.44 %, best-of-3
+`855/1296 ÷ 5/6` = 79.17 %. (The tie probability is 1/6 regardless of how many dice the
+attacker rolls, which is why each figure is just `1.2 ×` the raw win chance.) Confirmed
+against a 400,000-battle simulation: 50.00 / 69.36 / 79.22.
 
-**Why "keep the higher" and not "sum the two".** Summing 2d6 against 1d6 wins **90 %** of
-the time, which would make the Queen effectively unstoppable on the attack and undo the
-whole point of the dice. Best-of-two is a real edge that still loses almost a third of the
-time. Both figures were computed exactly and confirmed against a 200,000-battle simulation
-(69.44 % analytic vs 69.47 % simulated).
+**Why "keep the higher" and not "sum".** Summing 3d6 against 1d6 wins about **98 %**,
+which would make the Queen unstoppable and delete the dice from the game. Best-of-N is a
+real edge that still loses often enough to matter — even the Queen loses one attack in five.
 
-**Consequence to watch in playtesting.** This flips the arithmetic on some trades. Queen
-takes rook used to be expected-value −200 and is now **+72**, so it becomes a move worth
-playing; queen takes pawn is still clearly bad at −206. Whether that makes the Queen too
-dominant given she *already* has the best mobility is exactly the thing to feel out over a
-few games — this was the concern raised when the flat rule was chosen in the first place.
+**History.** v1 gave every piece exactly one die (a flat 50 %), on the reasoning that
+mobility already ranks the pieces in standard chess. That was then relaxed to give the
+Queen two dice, and now to the full ladder above.
+
+**Consequence to watch in playtesting.** This is the biggest balance change the game has
+had, and it cuts against the original v1 rationale. Attacking is now favoured for every
+piece except the pawn, so material stops being "sticky" and the game moves back toward
+ordinary chess with a luck layer on top. Expected values move accordingly:
+
+| trade | EV before (all 1d6) | EV now |
+|---|---|---|
+| Queen takes rook | −200 | **+208** |
+| Queen takes pawn | −400 | **−108** |
+| Rook takes knight | −90 | **+69** |
+| Knight takes rook | +90 | **+249** |
+| Knight takes pawn | −110 | **−28** |
+| Pawn takes queen | +400 | +400 (unchanged) |
+
+The thing to feel out: whether defending is now too weak — a defender has no way to
+improve its odds, so a Queen attack is close to a free capture at 79 %.
 
 **Implementation note.** The dice counts live in one table (`ATK_DICE` / `DEF_DICE` in
 `index.html`) and the win probability is derived from them analytically, so the computer
-opponent's search stays correct automatically. Reverting is a one-line change: empty
-`ATK_DICE`.
+opponent's expectiminimax stays correct automatically — verified: it declines
+queen-takes-pawn and plays queen-takes-rook under the new odds. Changing the ladder is a
+one-line edit to `ATK_DICE`.
 
 ## 3. The King
 

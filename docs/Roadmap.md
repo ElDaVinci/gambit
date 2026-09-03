@@ -320,6 +320,48 @@ halts in `state:"wrong"`, marks the correct two squares, and freezes all 64 squa
 with no red squares. The "can be taken on f7" claim was cross-checked through move
 generation rather than `isAttacked` — Black really does have `Rf8xf7`.
 
+## Attacking dice ranked by piece ✅ DONE (v21)
+
+Queen 3, Rook / Bishop / Knight 2, Pawn 1 — attacking only. **The defender always rolls
+one die.** Because the mechanic is table-driven (`ATK_DICE`) and the probability is derived
+analytically, the rule itself was a one-line change and the bot retuned itself.
+
+| Attacker | dice | wins |
+|---|---|---|
+| Queen | 3 | 79.2 % |
+| Rook / Bishop / Knight | 2 | 69.4 % |
+| Pawn | 1 | 50.0 % |
+
+Exact values cross-checked against a 400,000-battle simulation of the real mechanic
+(keep-highest, re-roll ties): 50.00 / 69.36 / 79.22 simulated. The engine's own
+`captureOdds` returns 50 / 69.44 / 79.17 and is independent of the defender's identity,
+as required.
+
+**This reverses the original v1 rationale** that mobility already ranks the pieces, so the
+dice should not. Every piece except the pawn now favours the attacker, material stops
+being "sticky", and the game moves back toward ordinary chess with a luck layer. EV shifts:
+queen×rook −200 → **+208**, rook×knight −90 → **+69**, knight×pawn −110 → **−28**. The bot
+was verified to decline queen-takes-pawn (−108) and play queen-takes-rook (+208) under the
+new table. The open question for playtesting is whether **defending is now too weak** — a
+defender cannot improve its one die, so a queen attack is close to a free capture.
+
+### Two layout problems the extra dice caused
+
+1. **Battle overlay.** Three 64px dice are a 216px row; with the defender and the gap that
+   is 314px inside a 360px panel — no slack. A three-die row now scales itself to 46px
+   (`.dieRow[data-n="3"]`), keyed on the die count rather than a breakpoint, since it is
+   the count that causes the overflow. Verified at 375px: children span 252px of 315px
+   available, nothing scrolls.
+2. **Menu hero.** `.heroSide` flex children had no `flex-shrink:0`, so a row under pressure
+   would silently crush a die to zero width rather than overflow visibly. Added, plus a
+   count-keyed shrink (42px, 32px on phones). Verified for 1, 2 and 3 attacking dice: no
+   die below 8px, all six faces built, the roll stays inside the hero card, no page scroll.
+
+**Testing note worth remembering:** measuring a die by `.dieBox` width is wrong. The box is
+3D-rotated, so a die landing on face 2 or 5 sits edge-on at ±90° and legitimately reports
+0 width. That produced a false "collapsed die" reading. Measure `.dieWrap`, which is not
+transformed.
+
 ## Phase 6 — next
 
 - **Playtest.** Does the 50/50-everything feel good, or too swingy? Tune from real games.
