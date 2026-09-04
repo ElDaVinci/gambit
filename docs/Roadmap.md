@@ -338,12 +338,18 @@ Exact values cross-checked against a 400,000-battle simulation of the real mecha
 as required.
 
 **This reverses the original v1 rationale** that mobility already ranks the pieces, so the
-dice should not. Every piece except the pawn now favours the attacker, material stops
-being "sticky", and the game moves back toward ordinary chess with a luck layer. EV shifts:
-queen×rook −200 → **+208**, rook×knight −90 → **+69**, knight×pawn −110 → **−28**. The bot
-was verified to decline queen-takes-pawn (−108) and play queen-takes-rook (+208) under the
-new table. The open question for playtesting is whether **defending is now too weak** — a
-defender cannot improve its one die, so a queen attack is close to a free capture.
+dice should not — and it reverses it on the strength of actual play. The flat 50/50
+version **wasn't fun**: half of all attacks failed outright with no way for a stronger
+piece to press its advantage, so attacking felt like a coin flip rather than a decision.
+That is the decisive evidence; the symmetry argument lost to it, and this is settled
+rather than open.
+
+Every piece except the pawn now favours the attacker, material stops being "sticky", and
+the game moves back toward ordinary chess with a luck layer. EV shifts: queen×rook
+−200 → **+208**, rook×knight −90 → **+69**, knight×pawn −110 → **−28**. The bot was
+verified to decline queen-takes-pawn (−108) and play queen-takes-rook (+208) under the new
+table. If the Queen's 79 % ever needs softening, the lever is dropping her to 2 dice — not
+a return to flat dice.
 
 ### Two layout problems the extra dice caused
 

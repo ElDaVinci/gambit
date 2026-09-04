@@ -54,14 +54,22 @@ against a 400,000-battle simulation: 50.00 / 69.36 / 79.22.
 which would make the Queen unstoppable and delete the dice from the game. Best-of-N is a
 real edge that still loses often enough to matter — even the Queen loses one attack in five.
 
-**History.** v1 gave every piece exactly one die (a flat 50 %), on the reasoning that
-mobility already ranks the pieces in standard chess. That was then relaxed to give the
-Queen two dice, and now to the full ladder above.
+**History, and why the v1 rationale was wrong.** v1 gave every piece exactly one die (a
+flat 50 %), on the theory that mobility already ranks the pieces so the dice should not.
+That theory was elegant and it **did not survive contact with playing the game** — the
+verdict after playtesting was simply *"it wasn't fun."* Losing half of all attacks
+outright, with no way for a stronger piece to press an advantage, made attacking feel
+arbitrary rather than tense: you were not making a decision, you were flipping a coin.
+The Queen was given two dice as a first correction, and the full ladder above followed.
 
-**Consequence to watch in playtesting.** This is the biggest balance change the game has
-had, and it cuts against the original v1 rationale. Attacking is now favoured for every
-piece except the pawn, so material stops being "sticky" and the game moves back toward
-ordinary chess with a luck layer on top. Expected values move accordingly:
+**This is the decisive evidence and it settles the question.** Playtest feel outranks the
+symmetry argument — a rule that reads well and plays badly is a bad rule. Anything below
+is a note for future tuning, not a reason to revisit the ladder.
+
+**What changed in the numbers.** Attacking is now favoured for every piece except the
+pawn, so material stops being "sticky" and the game moves toward ordinary chess with a
+luck layer on top — which is the direction the playtest asked for. Expected values move
+accordingly:
 
 | trade | EV before (all 1d6) | EV now |
 |---|---|---|
@@ -72,8 +80,9 @@ ordinary chess with a luck layer on top. Expected values move accordingly:
 | Knight takes pawn | −110 | **−28** |
 | Pawn takes queen | +400 | +400 (unchanged) |
 
-The thing to feel out: whether defending is now too weak — a defender has no way to
-improve its odds, so a Queen attack is close to a free capture at 79 %.
+Only remaining thing to feel out, and only if it actually bothers a player: the defender
+has no way to improve its one die, so a Queen attack is close to a free capture at 79 %.
+If that ever needs softening, the lever is the Queen (3 → 2), not a return to flat dice.
 
 **Implementation note.** The dice counts live in one table (`ATK_DICE` / `DEF_DICE` in
 `index.html`) and the win probability is derived from them analytically, so the computer
