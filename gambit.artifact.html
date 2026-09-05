@@ -1104,8 +1104,9 @@ details.rules .body li{margin:3px 0}
       </div>
       <button class="btn allIn" id="battleAllIn" type="button">All in &mdash; fight to the finish</button>
     </div>
-    <!-- Shown only while the computer is resolving its own assault. -->
-    <button class="btn rvGhost ffBtn" id="battleFF" type="button" style="display:none">Skip to the end &#9193;</button>
+    <!-- Offered whenever the engagement continues on its own: the computer's
+         assault, or an all-in. Speeds the dice up; it does not skip them. -->
+    <button class="btn rvGhost ffBtn" id="battleFF" type="button" style="display:none">Fast forward &#9193;</button>
     <button class="btn primary go" id="battleGo" type="button" style="display:none">Continue</button>
   </div>
 </div>
@@ -1738,16 +1739,16 @@ function battle(atkType, atkColor, defType, defColor, atSq, atkSouls, defSouls, 
        no more prompts, and the dice roll faster so a 15-duel fight is watchable
        rather than a wait. */
     var allIn=false;
-    /* The computer's own assaults run at the quick pace from the start — you
-       are watching a result, not making a decision — and "Skip to the end"
-       drops the animation entirely for the rest of the engagement. */
-    var quick = !!autoPress;
+    /* Every roll runs at the normal, readable pace. The Fast forward button is
+       the ONLY thing that speeds the dice up, and only once the player asks for
+       it — an engagement that continues on its own (the computer's assault, or
+       an all-in) offers the button, it does not hurry by itself. */
     var ff=false;
     var ffBtn=document.getElementById("battleFF");
-    ffBtn.style.display = autoPress ? "block" : "none";
-    function onFF(){ ff=true; ffBtn.style.display="none"; }
+    function offerFF(on){ ffBtn.style.display = (on && !ff) ? "block" : "none"; }
+    offerFF(!!autoPress);
+    function onFF(){ ff=true; offerFF(false); }
     ffBtn.addEventListener("click", onFF);
-    function hurried(){ return ff || allIn || quick; }
 
     var rounds=[], turnCount=0;
     showCounts(null);
@@ -1784,12 +1785,12 @@ function battle(atkType, atkColor, defType, defColor, atSq, atkSouls, defSouls, 
       rollSide(boxesA, va, 2);
       rollSide(boxesD, vd, 3);
 
-      if(reduced || ff){ setTimeout(function(){ markKept(boxesA,va); markKept(boxesD,vd); land(a,bd); }, ff?0:60); return; }
-      /* A committed engagement can run a dozen duels, so the roll is cut short —
-         still visibly a roll, but not a 1.2s wait fifteen times over. */
-      var settleMs = hurried() ? 420 : 1200;
+      if(reduced){ setTimeout(function(){ markKept(boxesA,va); markKept(boxesD,vd); land(a,bd); }, 60); return; }
+      /* Fast forward still ROLLS the dice, just quickly — it is a fast forward,
+         not a cut to the result. Everything else keeps the full 1.2s throw. */
+      var settleMs = ff ? 260 : 1200;
       sndDie(0.02); sndDie(0.10);       // leaving the hand
-      if(!hurried()){ sndDie(0.95); sndDie(1.05); }   // clattering to rest
+      if(!ff){ sndDie(0.95); sndDie(1.05); }   // clattering to rest
       setTimeout(function(){
         wrapA.classList.add("settle"); wrapD.classList.add("settle");
         markKept(boxesA,va); markKept(boxesD,vd);
@@ -1801,7 +1802,7 @@ function battle(atkType, atkColor, defType, defColor, atSq, atkSouls, defSouls, 
       if(a===bd){
         rollLog.textContent = "Tie on "+a+" — rolling again";
         tone({f0:300,dur:0.10,type:"square",gain:0.07});
-        setTimeout(throwDice, ff?0:(reduced?200:(hurried()?260:850)));
+        setTimeout(throwDice, reduced?200:(ff?140:850));
         return;
       }
       var win=a>bd;
@@ -1837,7 +1838,7 @@ function battle(atkType, atkColor, defType, defColor, atSq, atkSouls, defSouls, 
         (over ? (defFell?sndCapture:sndRepel) : sndRepel)();
         if(over) showGo(); else showChoice();
       };
-      if(reduced||ff) showResult(); else setTimeout(showResult, hurried()?220:420);
+      if(reduced) showResult(); else setTimeout(showResult, ff?150:420);
 
       /* The engagement continues only while the attacker wants it to. */
       function showChoice(){
@@ -1846,15 +1847,17 @@ function battle(atkType, atkColor, defType, defColor, atSq, atkSouls, defSouls, 
         var stop=document.getElementById("battleStop");
         var allInBtn=document.getElementById("battleAllIn");
         /* Committed to the finish: no more prompts, just keep going until one
-           garrison is empty. */
-        if(allIn){ setTimeout(nextDuel, ff?0:(reduced?80:300)); return; }
+           garrison is empty. Fast forward stays on offer, since this is exactly
+           the case where a player may not want to sit through every duel. */
+        if(allIn){ offerFF(true); setTimeout(nextDuel, ff?110:(reduced?80:700)); return; }
         /* The computer decides for itself, but the duels still play out on
-           screen so the player can watch the assault. */
+           screen at the normal pace so the player can watch the assault. */
         if(autoPress){
           if(autoPress(atkType, defType, atkLeft, defLeft)){
-            setTimeout(nextDuel, ff?0:(reduced?120:340));
+            offerFF(true);
+            setTimeout(nextDuel, ff?110:(reduced?120:700));
           } else {
-            setTimeout(showGo, ff?0:(reduced?60:400));
+            setTimeout(showGo, ff?80:(reduced?60:400));
           }
           return;
         }

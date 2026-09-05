@@ -39,11 +39,15 @@ Attacking an enemy piece opens an **engagement**, fought one duel at a time:
 Both running garrisons are shown beside the two pieces at the top of the duel panel, so
 the count you are spending sits next to the piece spending it.
 
-**Pacing.** A committed engagement shortens the dice roll (420 ms instead of 1200 ms),
-because a fifteen-duel fight at full speed is a wait rather than a spectacle. The
-computer's own assaults run at that quick pace from the start — you are watching a
-result, not making a decision — and carry a **Skip to the end** button that drops the
-animation entirely for the rest of the engagement.
+**Pacing.** Every roll runs at the same readable pace — a 1.2 s throw, about 2.3 s per
+duel. Nothing speeds up on its own. Whenever an engagement continues without asking (the
+computer's assault, or an all-in) a **Fast forward** button is offered, and only pressing
+it quickens the dice, to roughly 0.5 s per duel. It is a fast forward, not a skip: the
+dice still visibly roll.
+
+An earlier build quietly ran the computer's assaults at the quick pace by default. That
+was not asked for and read as too fast — the lesson being that a button the player presses
+is a different thing from a default they never chose.
 
 **The King rolls four dice**, which in a single row is wider than the panel and hangs off
 both edges. Four dice stack as a 2×2 block instead.
