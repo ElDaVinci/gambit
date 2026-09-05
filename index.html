@@ -444,9 +444,10 @@ body{
    couple of pixels of every piece's true middle. (74% looked "below the piece":
    the ink bottoms out at 72–81%, so that was down on the base.)
 
-   A thin halo in the piece's OWN fill colour clears a little space wherever the
-   digit meets the silhouette's stroke, which is what keeps a small number
-   readable over the busier middle of the piece.
+   Deliberately small — it is a quiet annotation on the piece, not a label
+   competing with it. A thin halo in the piece's OWN fill colour clears a little
+   space wherever the digit meets the silhouette's stroke, which is what keeps a
+   number this small readable over the busier middle of the piece.
 
    Sized in vw with a px floor and ceiling, so it MUST be checked at a real
    viewport width: at 0vw a bare min() collapses to font-size:0 and the number
@@ -455,7 +456,7 @@ body{
   position:absolute;left:0;right:0;top:49%;transform:translateY(-50%);
   z-index:3;pointer-events:none;text-align:center;
   font-family:"IBM Plex Sans",system-ui,sans-serif;font-weight:700;
-  font-size:clamp(10px,2.7vw,14px);line-height:1;
+  font-size:clamp(8px,2.2vw,11px);line-height:1;
   font-variant-numeric:tabular-nums;letter-spacing:-.03em;
   color:var(--piece-white-stroke);              /* dark digits on a white piece */
   text-shadow:0 0 2px var(--piece-white), 0 0 2px var(--piece-white);
@@ -679,9 +680,24 @@ details.rules .body li{margin:3px 0}
 @keyframes spark{0%{opacity:0;transform:scale(.4)}40%{opacity:1;transform:scale(1.15)}100%{opacity:0;transform:scale(1.5)}}
 .garrisonLine{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--muted);
   margin:0 0 4px;min-height:1.3em;font-variant-numeric:tabular-nums}
-.engageBtns{display:flex;gap:10px;justify-content:center;margin-top:10px}
+.engageBtns{display:flex;flex-direction:column;gap:8px;margin-top:10px}
 .engageBtns[hidden]{display:none}
-.engageBtns .btn{flex:1 1 0;min-width:0}
+.engageRow{display:flex;gap:10px;justify-content:center}
+.engageRow .btn{flex:1 1 0;min-width:0}
+/* "All in" is the committing choice, so it sits apart on its own line and is
+   styled as a warning rather than a primary action — it can lose the piece. */
+.btn.allIn{width:100%;background:transparent;color:var(--repel);
+  border:1px solid color-mix(in srgb,var(--repel) 55%,transparent);
+  font-size:12.5px;letter-spacing:.02em}
+.btn.allIn:hover{background:color-mix(in srgb,var(--repel) 12%,transparent);
+  border-color:var(--repel)}
+/* Live garrisons beside each piece in the header, so the count you are spending
+   is next to the piece spending it. */
+.versus .side{display:inline-flex;align-items:center;gap:7px}
+.sideCount{font-family:"IBM Plex Mono",monospace;font-weight:600;
+  font-size:17px;line-height:1;color:var(--ink);font-variant-numeric:tabular-nums;
+  transition:color .2s}
+.sideCount.hit{color:var(--repel)}
 @media (prefers-reduced-motion:reduce){
   .duel.fighting .fighter.atk,.duel.fighting .fighter.def,
   .duel.fighting .fighter .arm,.duel.fighting .clash{animation:none}
@@ -1057,9 +1073,9 @@ details.rules .body li{margin:3px 0}
   <div class="battle">
     <p class="kicker" id="battleKicker">Battle for e5</p>
     <div class="versus">
-      <span id="atkGlyph"></span>
+      <span class="side"><span id="atkGlyph"></span><b class="sideCount" id="atkCount"></b></span>
       <span class="vs">VS</span>
-      <span id="defGlyph"></span>
+      <span class="side"><b class="sideCount" id="defCount"></b><span id="defGlyph"></span></span>
     </div>
     <div class="roles"><span>Attacker</span><span>Defender</span></div>
     <!-- One soldier from each garrison steps out and fights. The dice below
@@ -1091,8 +1107,11 @@ details.rules .body li{margin:3px 0}
     <!-- After each duel the attacker chooses: press the attack on this same
          piece, or break it off and end the turn. -->
     <div class="engageBtns" id="engageBtns" style="display:none">
-      <button class="btn rvGhost" id="battleStop" type="button">Break off</button>
-      <button class="btn primary" id="battlePress" type="button">Press the attack</button>
+      <div class="engageRow">
+        <button class="btn rvGhost" id="battleStop" type="button">Break off</button>
+        <button class="btn primary" id="battlePress" type="button">Press the attack</button>
+      </div>
+      <button class="btn allIn" id="battleAllIn" type="button">All in &mdash; fight to the finish</button>
     </div>
     <button class="btn primary go" id="battleGo" type="button" style="display:none">Continue</button>
   </div>
@@ -1674,9 +1693,15 @@ function battle(atkType, atkColor, defType, defColor, atSq, atkSouls, defSouls, 
     duel.classList.remove("fighting");
     fAtk.className="fighter atk"+(atkColor==="b"?" dark":"");
     fDef.className="fighter def"+(defColor==="b"?" dark":"");
-    document.getElementById("garrisonLine").textContent =
-      NAME[atkType]+" "+atkSouls+" soldier"+(atkSouls===1?"":"s")+
-      "   vs   "+NAME[defType]+" "+defSouls+" soldier"+(defSouls===1?"":"s");
+    /* Live garrisons live beside the pieces at the top; the line under the
+       soldiers is now just the duel counter. */
+    var atkCountEl=document.getElementById("atkCount"), defCountEl=document.getElementById("defCount");
+    function showCounts(hit){
+      atkCountEl.textContent=atkLeft; defCountEl.textContent=defLeft;
+      atkCountEl.classList.toggle("hit", hit==="a");
+      defCountEl.classList.toggle("hit", hit==="d");
+    }
+    document.getElementById("garrisonLine").textContent="";
     document.getElementById("tallies").textContent="";
     document.getElementById("verdict").textContent="";
     document.getElementById("verdict").className="verdict";
@@ -1716,7 +1741,12 @@ function battle(atkType, atkColor, defType, defColor, atSq, atkSouls, defSouls, 
        as it likes, so these track the running garrisons across duels. */
     var atkLeft=atkSouls, defLeft=defSouls;
     var atkLost=0, defLost=0, duels=0;
+    /* "All in": once chosen, the engagement runs itself to a conclusion —
+       no more prompts, and the dice roll faster so a 15-duel fight is watchable
+       rather than a wait. */
+    var allIn=false;
     var rounds=[], turnCount=0;
+    showCounts(null);
     throwDice();
 
     function rollSide(boxes, values, spinBase){
@@ -1751,20 +1781,23 @@ function battle(atkType, atkColor, defType, defColor, atSq, atkSouls, defSouls, 
       rollSide(boxesD, vd, 3);
 
       if(reduced){ setTimeout(function(){ markKept(boxesA,va); markKept(boxesD,vd); land(a,bd); }, 60); return; }
+      /* All in can run a dozen duels, so the roll is cut short once committed —
+         still visibly a roll, but not a 1.2s wait fifteen times over. */
+      var settleMs = allIn ? 420 : 1200;
       sndDie(0.02); sndDie(0.10);       // leaving the hand
-      sndDie(0.95); sndDie(1.05);       // clattering to rest
+      if(!allIn){ sndDie(0.95); sndDie(1.05); }   // clattering to rest
       setTimeout(function(){
         wrapA.classList.add("settle"); wrapD.classList.add("settle");
         markKept(boxesA,va); markKept(boxesD,vd);
         land(a,bd);
-      }, 1200);
+      }, settleMs);
     }
 
     function land(a,bd){
       if(a===bd){
         rollLog.textContent = "Tie on "+a+" — rolling again";
         tone({f0:300,dur:0.10,type:"square",gain:0.07});
-        setTimeout(throwDice, reduced?200:850);
+        setTimeout(throwDice, reduced?200:(allIn?260:850));
         return;
       }
       var win=a>bd;
@@ -1783,9 +1816,8 @@ function battle(atkType, atkColor, defType, defColor, atSq, atkSouls, defSouls, 
       var v=document.getElementById("verdict");
       var showResult=function(){
         (win?fDef:fAtk).classList.add("falls");
-        document.getElementById("garrisonLine").textContent =
-          NAME[atkType]+" "+atkLeft+"   vs   "+NAME[defType]+" "+defLeft+
-          "      ·  duel "+duels;
+        showCounts(win?"d":"a");        // the header counts ARE the running score
+        document.getElementById("garrisonLine").textContent = "duel "+duels;
         v.textContent = over
           ? (defFell ? "The "+NAME[defType].toLowerCase()+" falls!" : "Your "+NAME[atkType].toLowerCase()+" falls!")
           : (win ? "A defender is cut down" : "An attacker is cut down");
@@ -1793,18 +1825,23 @@ function battle(atkType, atkColor, defType, defColor, atSq, atkSouls, defSouls, 
         document.getElementById("verdictSub").textContent = over
           ? (defFell ? NAME[atkType]+" takes "+atSq+" — the last of the guard is gone"
                      : NAME[atkType]+" is destroyed; the "+NAME[defType].toLowerCase()+" holds "+atSq)
-          : (win ? NAME[defType]+" down to "+defLeft+" — press on, or break off?"
-                 : NAME[atkType]+" down to "+atkLeft+" — press on, or break off?");
+          : (allIn ? "All in — fighting on"
+                   : (win ? NAME[defType]+" down to "+defLeft+" — press on, or break off?"
+                          : NAME[atkType]+" down to "+atkLeft+" — press on, or break off?"));
         (over ? (defFell?sndCapture:sndRepel) : sndRepel)();
         if(over) showGo(); else showChoice();
       };
-      if(reduced) showResult(); else setTimeout(showResult, 420);
+      if(reduced) showResult(); else setTimeout(showResult, allIn?220:420);
 
       /* The engagement continues only while the attacker wants it to. */
       function showChoice(){
         var box=document.getElementById("engageBtns");
         var press=document.getElementById("battlePress");
         var stop=document.getElementById("battleStop");
+        var allInBtn=document.getElementById("battleAllIn");
+        /* Committed to the finish: no more prompts, just keep going until one
+           garrison is empty. */
+        if(allIn){ setTimeout(nextDuel, reduced?80:300); return; }
         /* The computer decides for itself, but the duels still play out on
            screen so the player can watch the assault. */
         if(autoPress){
@@ -1821,16 +1858,20 @@ function battle(atkType, atkColor, defType, defColor, atSq, atkSouls, defSouls, 
           box.style.display="none";
           press.removeEventListener("click", onPress);
           stop.removeEventListener("click", onStop);
+          allInBtn.removeEventListener("click", onAllIn);
           document.removeEventListener("keydown", onKey2);
         }
         function onPress(){ cleanup(); nextDuel(); }
         function onStop(){ cleanup(); done(); }
+        function onAllIn(){ allIn=true; cleanup(); nextDuel(); }
         function onKey2(e){
           if(e.key==="Enter"||e.key===" "){ e.preventDefault(); onPress(); }
           else if(e.key==="Escape"){ e.preventDefault(); onStop(); }
+          else if(e.key==="a"||e.key==="A"){ e.preventDefault(); onAllIn(); }
         }
         press.addEventListener("click", onPress);
         stop.addEventListener("click", onStop);
+        allInBtn.addEventListener("click", onAllIn);
         document.addEventListener("keydown", onKey2);
       }
 
@@ -2603,6 +2644,11 @@ function choosePromo(cb){
   document.querySelector(".battle .versus").style.display="none";
   document.querySelector(".battle .roles").style.display="none";
   document.querySelector(".battle .dice").style.display="none";
+  /* The soldier stage and the engagement buttons belong to a duel, not to a
+     promotion prompt — hide them too or they linger behind the piece choice. */
+  document.getElementById("duel").style.display="none";
+  document.getElementById("garrisonLine").style.display="none";
+  document.getElementById("engageBtns").style.display="none";
   document.getElementById("tallies").textContent="";
   document.getElementById("verdict").textContent="";
   document.getElementById("verdictSub").textContent="";
@@ -2623,6 +2669,8 @@ function choosePromo(cb){
       document.querySelector(".battle .versus").style.display="";
       document.querySelector(".battle .roles").style.display="";
       document.querySelector(".battle .dice").style.display="";
+      document.getElementById("duel").style.display="";
+      document.getElementById("garrisonLine").style.display="";
       cb(pp);
     });
     wrap.appendChild(b);

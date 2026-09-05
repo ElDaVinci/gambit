@@ -31,8 +31,14 @@ Attacking an enemy piece opens an **engagement**, fought one duel at a time:
 1. Each side sends one soldier. The attacker rolls its dice, the defender rolls one.
 2. Each keeps its **highest single die**. Higher wins. Ties re-roll.
 3. **One soldier dies — the loser's.**
-4. **The attacker then chooses: press the attack, or break off.** Pressing fights another
-   duel against *the same piece*. There is no limit, and it is all one turn.
+4. **The attacker then chooses: press the attack, break off, or go all in.** Pressing
+   fights another duel against *the same piece*; **all in** stops asking and runs the
+   engagement to a conclusion — one side destroyed. There is no limit, and it is all
+   one turn.
+
+Both running garrisons are shown beside the two pieces at the top of the duel panel, so
+the count you are spending sits next to the piece spending it. All in also shortens the
+dice roll, since a fifteen-duel fight at full speed is a wait rather than a spectacle.
 
 The engagement ends when the attacker breaks off, or when a garrison is emptied. A unit is
 destroyed only when its **last** soldier falls; at that moment the attacker advances onto
