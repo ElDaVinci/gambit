@@ -419,18 +419,32 @@ body{
 .sq.pickable .glyph{cursor:pointer}
 .sq.pickable:hover .glyph{transform:translateY(-2px)}
 /* ---- garrison count, printed on the piece ----
-   No badge and no bubble: the number sits on the piece's base, taking the
-   opposite colour to the piece so it reads as part of it. Positioned at 63%
-   down the square, which is the solidly-filled base on every silhouette. */
+   No badge and no bubble: the number sits on the piece itself in the opposite
+   colour, so it reads as part of the piece.
+
+   Two things make a small number legible here. It sits at 74% down the square,
+   centred on the wide flat base every silhouette shares (which spans roughly
+   68–81% of the square) rather than the narrow body — a digit over the body
+   spills past the outline and turns to mush. And it carries a thin halo in the
+   piece's OWN fill colour, clearing a little space wherever the digit meets the
+   silhouette's stroke.
+
+   Sized in vw with a px floor and ceiling, so it MUST be checked at a real
+   viewport width: at 0vw a bare min() collapses to font-size:0 and the number
+   silently disappears — which is exactly what hid it during testing. */
 .count{
-  position:absolute;left:0;right:0;top:63%;transform:translateY(-50%);
+  position:absolute;left:0;right:0;top:74%;transform:translateY(-50%);
   z-index:3;pointer-events:none;text-align:center;
   font-family:"IBM Plex Sans",system-ui,sans-serif;font-weight:700;
-  font-size:min(3.6vw,19px);line-height:1;
-  font-variant-numeric:tabular-nums;letter-spacing:-.02em;
-  color:var(--piece-white-stroke);            /* dark digits on a white piece */
+  font-size:clamp(10px,2.7vw,14px);line-height:1;
+  font-variant-numeric:tabular-nums;letter-spacing:-.03em;
+  color:var(--piece-white-stroke);              /* dark digits on a white piece */
+  text-shadow:0 0 2px var(--piece-white), 0 0 2px var(--piece-white);
 }
-.count.onDark{color:var(--piece-black-stroke)} /* light digits on a black piece */
+.count.onDark{                                  /* light digits on a black piece */
+  color:var(--piece-black-stroke);
+  text-shadow:0 0 2px var(--piece-black), 0 0 2px var(--piece-black);
+}
 /* The last soldier is the only state worth calling out in colour. */
 .count.last{color:var(--repel)}
 .count.onDark.last{color:#ff8f7e}
