@@ -74,12 +74,18 @@ page**, not just a commit — so two mechanics can be compared side by side on a
 |---|---|---|
 | **v21 — dice ladder** (Queen 3, Rook/Bishop/Knight 2, Pawn 1; defender always 1) | [`/archive/v21-dice-ladder/`](https://eldavinci.github.io/gambit/archive/v21-dice-ladder/) | `v21-dice-ladder` |
 
+Each archive **installs as its own app**, with its own manifest, its own service worker
+scoped to its folder, and its own icon on a different-coloured ground — so two Gambits on
+a home screen are told apart at a glance. Regenerate a variant icon with
+`powershell -File tools/make-icons.ps1 -OutDir <dir> -Bg '#4A3B2A'`.
+
 Rules for the archive, so a snapshot stays trustworthy:
 
-- **Never edit a file under `archive/`.** It is a record of how the game actually played.
-- Snapshots deliberately have **no manifest and no service worker**, and `sw.js` skips any
-  path containing `/archive/`. Otherwise the worker's offline fallback could serve the
-  *current* `index.html` at an archive URL and quietly show the wrong game.
+- **Never edit the game inside `archive/`.** It is a record of how it actually played.
+- The live `sw.js` skips any path containing `/archive/`, and each archive's own worker is
+  scoped to its own folder. Neither can serve the other's files — otherwise the live
+  worker's offline fallback would hand back the *current* `index.html` at an archive URL
+  and quietly show the wrong game.
 - To restore one as the live game: `git checkout <tag> -- index.html`.
 
 ## Playing the computer

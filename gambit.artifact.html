@@ -418,23 +418,22 @@ body{
 }
 .sq.pickable .glyph{cursor:pointer}
 .sq.pickable:hover .glyph{transform:translateY(-2px)}
-/* ---- garrison badge ----
-   How many soldiers the unit has left, top-right of its square. Sized in % of
-   the square so it holds up from a 36px phone square to a 64px desktop one. */
-.garrison{
-  position:absolute;top:1%;right:1%;z-index:4;pointer-events:none;
-  min-width:38%;height:38%;padding:0 8%;
-  display:flex;align-items:center;justify-content:center;
-  border-radius:999px;
-  font-family:"IBM Plex Mono",monospace;font-weight:600;
-  font-size:min(2.1vw,13px);line-height:1;
-  font-variant-numeric:tabular-nums;
-  background:var(--surface);color:var(--ink-soft);
-  border:1px solid var(--line);
-  box-shadow:0 1px 2px rgba(0,0,0,.35);
+/* ---- garrison count, printed on the piece ----
+   No badge and no bubble: the number sits on the piece's base, taking the
+   opposite colour to the piece so it reads as part of it. Positioned at 63%
+   down the square, which is the solidly-filled base on every silhouette. */
+.count{
+  position:absolute;left:0;right:0;top:63%;transform:translateY(-50%);
+  z-index:3;pointer-events:none;text-align:center;
+  font-family:"IBM Plex Sans",system-ui,sans-serif;font-weight:700;
+  font-size:min(3.6vw,19px);line-height:1;
+  font-variant-numeric:tabular-nums;letter-spacing:-.02em;
+  color:var(--piece-white-stroke);            /* dark digits on a white piece */
 }
-.garrison.hurt{color:var(--brass);border-color:var(--brass)}
-.garrison.last{background:var(--repel);color:#fff;border-color:var(--repel)}
+.count.onDark{color:var(--piece-black-stroke)} /* light digits on a black piece */
+/* The last soldier is the only state worth calling out in colour. */
+.count.last{color:var(--repel)}
+.count.onDark.last{color:#ff8f7e}
 .sq.sel::after{content:"";position:absolute;inset:0;background:var(--sel);z-index:1}
 /* Last move: the square the piece LEFT is outlined and hollow; the square it
    ARRIVED on is filled and pulses. Reading order is unmistakable at a glance. */
@@ -647,6 +646,9 @@ details.rules .body li{margin:3px 0}
 @keyframes spark{0%{opacity:0;transform:scale(.4)}40%{opacity:1;transform:scale(1.15)}100%{opacity:0;transform:scale(1.5)}}
 .garrisonLine{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--muted);
   margin:0 0 4px;min-height:1.3em;font-variant-numeric:tabular-nums}
+.engageBtns{display:flex;gap:10px;justify-content:center;margin-top:10px}
+.engageBtns[hidden]{display:none}
+.engageBtns .btn{flex:1 1 0;min-width:0}
 @media (prefers-reduced-motion:reduce){
   .duel.fighting .fighter.atk,.duel.fighting .fighter.def,
   .duel.fighting .fighter .arm,.duel.fighting .clash{animation:none}
@@ -990,16 +992,20 @@ details.rules .body li{margin:3px 0}
       <ul>
         <li>Movement, check, castling, en&nbsp;passant, promotion &mdash; all standard.</li>
         <li>Every piece is a <strong>unit of soldiers</strong> &mdash; Pawn&nbsp;4, Knight&nbsp;8,
-          Bishop&nbsp;8, Rook&nbsp;10, Queen&nbsp;15, King&nbsp;20. The number in the corner of each
-          piece is what it has left.</li>
-        <li>An attack is <strong>one duel</strong>: a single soldier from each side fights.
-          Both roll, each keeps its <strong>highest die</strong>, higher wins, ties re-roll.
-          <strong>Exactly one soldier dies</strong> &mdash; the loser's.</li>
+          Bishop&nbsp;8, Rook&nbsp;10, Queen&nbsp;15, King&nbsp;20. The number printed on each piece
+          is what it has left; it turns red on the last soldier.</li>
+        <li>An attack is a <strong>duel</strong>: one soldier from each side fights. Both roll,
+          each keeps its <strong>highest die</strong>, higher wins, ties re-roll, and
+          <strong>the loser's soldier dies</strong>.</li>
+        <li><strong>You choose how long to press.</strong> After each duel you may fight the
+          same piece again or break off &mdash; as many duels as you like, all in one turn.
+          Stop while ahead, stop after losses, or fight until one of you is destroyed.</li>
         <li><strong>Attacking dice go by piece</strong> &mdash; King&nbsp;4, Queen&nbsp;3,
           Rook / Bishop / Knight&nbsp;2, Pawn&nbsp;1: <strong>85%</strong>, <strong>79%</strong>,
           <strong>69%</strong>, <strong>50%</strong>. The <strong>defender always rolls one die</strong>.</li>
         <li>Nobody moves and nobody is captured until a unit is <strong>wiped out</strong>. Lose your
-          last soldier and the piece is gone; the winner takes the square. Damage is permanent.</li>
+          last soldier and the piece is gone; the winner takes the square. Break off and both
+          pieces stay put, keeping their losses &mdash; damage is permanent.</li>
         <li>Your King fights too. <strong>Check no longer forces you</strong> &mdash; run, block,
           fight the attacker, or ignore it and take the hits. The King still may not step onto
           an attacked square, and pins no longer bind.</li>
@@ -1047,6 +1053,12 @@ details.rules .body li{margin:3px 0}
     <p class="tallies" id="tallies"></p>
     <p class="verdict" id="verdict"></p>
     <p class="verdict-sub" id="verdictSub"></p>
+    <!-- After each duel the attacker chooses: press the attack on this same
+         piece, or break it off and end the turn. -->
+    <div class="engageBtns" id="engageBtns" style="display:none">
+      <button class="btn rvGhost" id="battleStop" type="button">Break off</button>
+      <button class="btn primary" id="battlePress" type="button">Press the attack</button>
+    </div>
     <button class="btn primary go" id="battleGo" type="button" style="display:none">Continue</button>
   </div>
 </div>
@@ -1264,11 +1276,13 @@ function inCheck(b,color){
 
 /* ================= apply a move (pure-ish) ================= */
 /* returns {board,castling,ep,halfmove,captured} ; captureSucceeds only matters for capture moves */
-/* Apply a move. For a CAPTURE this resolves one duel, not a whole capture:
-   `attackerWins` says who won that single roll, and exactly one soldier dies.
-   The board only changes if that soldier was the unit's last one — so most
-   attacks leave every piece exactly where it stood, with one fewer soldier. */
-function applyMove(st, mv, attackerWins){
+/* Apply a move. For a CAPTURE this applies the result of an ENGAGEMENT — one
+   or many duels against the same piece, which the attacker breaks off when it
+   chooses. `result` is either a boolean (one duel; true = attacker won it),
+   which is what the search uses, or {atkLost, defLost} for a whole engagement.
+   The board only changes if a garrison was emptied — otherwise both pieces
+   stand exactly where they were, carrying their losses. */
+function applyMove(st, mv, result){
   var b=st.board.slice();
   var sl=(st.souls || startSouls(st.board)).slice();
   var cast={wK:st.castling.wK,wQ:st.castling.wQ,bK:st.castling.bK,bQ:st.castling.bQ};
@@ -1291,30 +1305,31 @@ function applyMove(st, mv, attackerWins){
     cast[color+"K"]=false; cast[color+"Q"]=false;
   }
   else if(mv.capture){
-    /* ---- one duel ---- */
+    /* ---- an engagement: N duels against the same piece ---- */
+    var atkLost=0, defLost=0;
+    if(result===true) defLost=1;
+    else if(result===false || result==null) atkLost=1;
+    else { atkLost=result.atkLost||0; defLost=result.defLost||0; }
+
     var defSq = mv.ep ? idx(rowOf(mv.from), colOf(mv.to)) : mv.to;
     var victim = b[defSq];
-    if(attackerWins){
-      sl[defSq]--;
-      duel={winner:"attacker", sq:defSq, left:sl[defSq]};
-      if(sl[defSq]<=0){
-        // last soldier gone: the unit falls and the attacker takes the square
-        captured={color:victim[0],type:victim[1],cause:"destroyed"};
-        b[defSq]=""; sl[defSq]=0;
-        if(defSq!==mv.to){ b[mv.to]=""; sl[mv.to]=0; }   // en passant: land beyond
-        step(mv.from, mv.to);
-        if(mv.promo){ b[mv.to]=color+mv.promo; sl[mv.to]=Math.min(sl[mv.to], maxSouls(mv.promo)); }
-        if(type==="k"){ cast[color+"K"]=false; cast[color+"Q"]=false; }
-        dropRight(mv.from); dropRight(mv.to);
-      }
-    } else {
-      sl[mv.from]--;
-      duel={winner:"defender", sq:mv.from, left:sl[mv.from]};
-      if(sl[mv.from]<=0){
-        captured={color:color,type:type,cause:"destroyed"};
-        b[mv.from]=""; sl[mv.from]=0;
-        dropRight(mv.from);
-      }
+    sl[defSq] = Math.max(0, sl[defSq]-defLost);
+    sl[mv.from] = Math.max(0, sl[mv.from]-atkLost);
+    duel={atkLost:atkLost, defLost:defLost, atkLeft:sl[mv.from], defLeft:sl[defSq]};
+
+    if(sl[defSq]<=0){
+      // the defending garrison is gone: the unit falls and the attacker takes the square
+      captured={color:victim[0],type:victim[1],cause:"destroyed"};
+      b[defSq]=""; sl[defSq]=0;
+      if(defSq!==mv.to){ b[mv.to]=""; sl[mv.to]=0; }   // en passant: land beyond
+      step(mv.from, mv.to);
+      if(mv.promo){ b[mv.to]=color+mv.promo; sl[mv.to]=Math.min(sl[mv.to], maxSouls(mv.promo)); }
+      if(type==="k"){ cast[color+"K"]=false; cast[color+"Q"]=false; }
+      dropRight(mv.from); dropRight(mv.to);
+    } else if(sl[mv.from]<=0){
+      captured={color:color,type:type,cause:"destroyed"};
+      b[mv.from]=""; sl[mv.from]=0;
+      dropRight(mv.from);
     }
     hm=0;   // a casualty is progress, so the 50-move clock restarts
   }
@@ -1596,7 +1611,22 @@ function rollDie(box, value, spins){
 /* ================= dice battle (async) ================= */
 var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-function battle(atkType, atkColor, defType, defColor, atSq, atkSouls, defSouls){
+/* Should the attacker fight another duel? One duel stakes one soldier on each
+   side, so press on exactly while that trade is worth making — and never spend
+   the attacker's last soldier on a duel that cannot finish the job. */
+function botPressOn(atkType, defType, atkLeft, defLeft){
+  if(atkLeft<=1 && defLeft>1) return false;      // one soldier left, can't win it
+  var p=captureOdds(atkType, defType);
+  var gain=unitValue(defType, defLeft)-unitValue(defType, defLeft-1);
+  var risk=unitValue(atkType, atkLeft)-unitValue(atkType, atkLeft-1);
+  /* Finishing the unit is worth more than the soldier: the whole remaining
+     piece falls and the square is taken. */
+  if(defLeft===1) gain=unitValue(defType, 1);
+  if(atkLeft===1) risk=unitValue(atkType, 1);
+  return p*gain > (1-p)*risk;
+}
+
+function battle(atkType, atkColor, defType, defColor, atSq, atkSouls, defSouls, autoPress){
   return new Promise(function(resolve){
     var ov=document.getElementById("overlay");
     document.getElementById("battleKicker").textContent =
@@ -1647,6 +1677,10 @@ function battle(atkType, atkColor, defType, defColor, atSq, atkSouls, defSouls){
     rollLog.textContent="";
     wrapA.classList.remove("winner"); wrapD.classList.remove("winner");
 
+    /* Engagement state. The attacker may keep fighting THIS piece for as long
+       as it likes, so these track the running garrisons across duels. */
+    var atkLeft=atkSouls, defLeft=defSouls;
+    var atkLost=0, defLost=0, duels=0;
     var rounds=[], turnCount=0;
     throwDice();
 
@@ -1699,56 +1733,112 @@ function battle(atkType, atkColor, defType, defColor, atSq, atkSouls, defSouls){
         return;
       }
       var win=a>bd;
+      duels++;
+      if(win){ defLeft--; defLost++; } else { atkLeft--; atkLost++; }
       lastBattle={a:a, d:bd, rounds:rounds.slice()};   // kept for the game review
       (win?wrapA:wrapD).classList.add("winner");
       document.getElementById("tallies").textContent = "Attacker "+a+"  ·  Defender "+bd;
       rollLog.textContent = rounds.length>1 ? ("Rolls: "+rounds.join("  ·  ")) : "";
 
-      /* Now play the duel the dice just decided: both soldiers swing, then the
-         loser falls. One soldier dies — the piece only falls with its last. */
-      var loserLeft = win ? defSouls-1 : atkSouls-1;
-      var unitFalls = loserLeft<=0;
+      /* Play the duel the dice just decided: both soldiers swing, the loser
+         falls. One soldier dies per duel — a unit only falls with its last. */
+      var defFell = defLeft<=0, atkFell = atkLeft<=0;
+      var over = defFell || atkFell;
       duel.classList.add("fighting");
       var v=document.getElementById("verdict");
       var showResult=function(){
         (win?fDef:fAtk).classList.add("falls");
-        v.textContent = unitFalls
-          ? (win ? "The "+NAME[defType].toLowerCase()+" falls!" : "Your "+NAME[atkType].toLowerCase()+" falls!")
+        document.getElementById("garrisonLine").textContent =
+          NAME[atkType]+" "+atkLeft+"   vs   "+NAME[defType]+" "+defLeft+
+          "      ·  duel "+duels;
+        v.textContent = over
+          ? (defFell ? "The "+NAME[defType].toLowerCase()+" falls!" : "Your "+NAME[atkType].toLowerCase()+" falls!")
           : (win ? "A defender is cut down" : "An attacker is cut down");
         v.className = "verdict "+(win?"win":"lose");
-        document.getElementById("verdictSub").textContent = unitFalls
-          ? (win ? NAME[atkType]+" takes "+atSq+" — the last of the guard is gone"
-                 : NAME[atkType]+" is destroyed; the "+NAME[defType].toLowerCase()+" holds "+atSq)
-          : (win ? NAME[defType]+" down to "+loserLeft+" soldier"+(loserLeft===1?"":"s")+" — it holds "+atSq
-                 : NAME[atkType]+" down to "+loserLeft+" soldier"+(loserLeft===1?"":"s")+" — the attack stalls");
-        (unitFalls ? (win?sndCapture:sndRepel) : sndRepel)();
-        showGo();
+        document.getElementById("verdictSub").textContent = over
+          ? (defFell ? NAME[atkType]+" takes "+atSq+" — the last of the guard is gone"
+                     : NAME[atkType]+" is destroyed; the "+NAME[defType].toLowerCase()+" holds "+atSq)
+          : (win ? NAME[defType]+" down to "+defLeft+" — press on, or break off?"
+                 : NAME[atkType]+" down to "+atkLeft+" — press on, or break off?");
+        (over ? (defFell?sndCapture:sndRepel) : sndRepel)();
+        if(over) showGo(); else showChoice();
       };
       if(reduced) showResult(); else setTimeout(showResult, 420);
 
+      /* The engagement continues only while the attacker wants it to. */
+      function showChoice(){
+        var box=document.getElementById("engageBtns");
+        var press=document.getElementById("battlePress");
+        var stop=document.getElementById("battleStop");
+        /* The computer decides for itself, but the duels still play out on
+           screen so the player can watch the assault. */
+        if(autoPress){
+          if(autoPress(atkType, defType, atkLeft, defLeft)){
+            setTimeout(nextDuel, reduced?120:900);
+          } else {
+            setTimeout(showGo, reduced?60:500);
+          }
+          return;
+        }
+        box.style.display="flex";
+        try{ press.focus({preventScroll:true}); }catch(err){}
+        function cleanup(){
+          box.style.display="none";
+          press.removeEventListener("click", onPress);
+          stop.removeEventListener("click", onStop);
+          document.removeEventListener("keydown", onKey2);
+        }
+        function onPress(){ cleanup(); nextDuel(); }
+        function onStop(){ cleanup(); done(); }
+        function onKey2(e){
+          if(e.key==="Enter"||e.key===" "){ e.preventDefault(); onPress(); }
+          else if(e.key==="Escape"){ e.preventDefault(); onStop(); }
+        }
+        press.addEventListener("click", onPress);
+        stop.addEventListener("click", onStop);
+        document.addEventListener("keydown", onKey2);
+      }
+
       function showGo(){
-      var go=document.getElementById("battleGo");
-      go.style.display="block";
-      /* preventScroll matters: on a phone the panel can be taller than the
-         viewport, and a plain focus() scrolls the button into view — which
-         pushes the dice the player is trying to read off the top. */
-      try{ go.focus({preventScroll:true}); }catch(err){ /* older browsers */ }
-      var done=false;
-      function finish(){
-        if(done) return; done=true;
-        ov.classList.remove("show");
-        go.removeEventListener("click", finish);
-        document.removeEventListener("keydown", onKey);
-        resolve(win);
+        var go=document.getElementById("battleGo");
+        go.style.display="block";
+        /* preventScroll matters: on a phone the panel can be taller than the
+           viewport, and a plain focus() scrolls the button into view — which
+           pushes the dice the player is trying to read off the top. */
+        try{ go.focus({preventScroll:true}); }catch(err){ /* older browsers */ }
+        function finish(){
+          go.style.display="none";
+          go.removeEventListener("click", finish);
+          document.removeEventListener("keydown", onKey);
+          done();
+        }
+        function onKey(e){
+          if(e.key==="Enter"||e.key===" "||e.key==="Escape"){ e.preventDefault(); finish(); }
+        }
+        /* The overlay stays until the player dismisses it — no timeout, and no
+           click-outside, so a stray click can never skip the result. */
+        go.addEventListener("click", finish);
+        document.addEventListener("keydown", onKey);
       }
-      function onKey(e){
-        if(e.key==="Enter"||e.key===" "||e.key==="Escape"){ e.preventDefault(); finish(); }
-      }
-      /* The overlay stays until the player dismisses it — no timeout, and no
-         click-outside, so a stray click can never skip the result. */
-      go.addEventListener("click", finish);
-      document.addEventListener("keydown", onKey);
-      }
+    }
+
+    /* Reset the stage and fight the next duel of the same engagement. */
+    function nextDuel(){
+      duel.classList.remove("fighting");
+      fAtk.classList.remove("falls"); fDef.classList.remove("falls");
+      wrapA.classList.remove("winner"); wrapD.classList.remove("winner");
+      var v=document.getElementById("verdict");
+      v.textContent=""; v.className="verdict";
+      document.getElementById("verdictSub").textContent="";
+      throwDice();
+    }
+
+    var settled=false;
+    function done(){
+      if(settled) return; settled=true;
+      ov.classList.remove("show");
+      resolve({atkLost:atkLost, defLost:defLost, duels:duels,
+               outcome: defLeft<=0 ? "captured" : (atkLeft<=0 ? "attackerDestroyed" : "stopped")});
     }
   });
 }
@@ -1772,18 +1862,26 @@ function commit(mv){
   var defPc = b[defSq], defType=defPc[1], defColor=defPc[0];
   var sl = state.souls || startSouls(b);
   render();
+
+  /* The computer makes the same press-or-break-off decision the player does,
+     but it makes it automatically — the overlay still runs so the player can
+     watch every duel of the bot's assault. */
+  var auto = (botOn && state.turn===botSide) ? botPressOn : null;
   battle(atkType, atkColor, defType, defColor, sqName(mv.to),
-         sl[mv.from], sl[defSq]).then(function(win){
-    finalize(mv, win, {defType:defType});
+         sl[mv.from], sl[defSq], auto).then(function(res){
+    finalize(mv, res, {defType:defType});
   });
 }
 
-function finalize(mv, success, extra){
+function finalize(mv, result, extra){
   var moverColor = state.turn;
   var atkType = (state.board[mv.from] || "  ")[1];
   var defSq = mv.ep ? idx(rowOf(mv.from), colOf(mv.to)) : mv.to;
   var defType = (state.board[defSq] || "  ")[1];
-  var res = applyMove(state, mv, success);
+  /* `result` is an engagement summary for a capture, or plain true otherwise. */
+  var success = (result && typeof result==="object")
+    ? (result.outcome==="captured") : !!result;
+  var res = applyMove(state, mv, result);
   state.board = res.board;
   state.souls = res.souls;
   state.castling = res.castling;
@@ -1801,7 +1899,10 @@ function finalize(mv, success, extra){
     capture:!!mv.capture, success:success,
     victim: defType || null,
     fell: unitFell,
-    left: res.duel ? res.duel.left : null,
+    duels: (result && result.duels) || (mv.capture?1:0),
+    atkLost: res.duel ? res.duel.atkLost : 0,
+    defLost: res.duel ? res.duel.defLost : 0,
+    left: res.duel ? res.duel.defLeft : null,
     rolls: (mv.capture && lastBattle) ? lastBattle.rounds : null
   };
   lastBattle=null;
@@ -1990,12 +2091,13 @@ function render(){
     var inner="";
     if(pc){
       inner=pieceSVG(pc[0], pc[1]);
-      /* Garrison badge, top-right of the square. `hurt` once the unit has taken
-         losses and `last` on its final soldier, so a nearly-broken piece reads
-         at a glance without counting. */
-      var n=souls[i], full=maxSouls(pc[1]);
-      var cls="garrison"+(n<full?" hurt":"")+(n<=1?" last":"");
-      inner+='<span class="'+cls+'">'+n+'</span>';
+      /* The garrison is printed INSIDE the piece — dark on a white piece, light
+         on a black one — so the count reads as part of the piece instead of
+         adding a second thing to scan. Sits over the base, which is the one
+         solidly-filled area every silhouette shares. */
+      var n=souls[i];
+      inner+='<span class="count'+(pc[0]==="b"?" onDark":"")+
+             (n<=1?" last":"")+'">'+n+'</span>';
     }
     if(sel===i) cell.classList.add("sel");
     if(lm){
@@ -3465,6 +3567,7 @@ window.__G={freshState:freshState,legalMoves:legalMoves,applyMove:applyMove,opp:
             getNodes:function(){return nodes;},
             buildDie:buildDie,rollDie:rollDie,FACE_ROT:FACE_ROT,PIPS:PIPS,
             winChance:winChance,captureOdds:captureOdds,atkDice:atkDice,defDice:defDice,
+            SOLDIERS:SOLDIERS,maxSouls:maxSouls,unitValue:unitValue,botPressOn:botPressOn,
             describePly:describePly,enterReview:enterReview,getState:function(){return state;},
             runHeroScene:function(){return runHeroScene();},reducedMotion:function(){return reduced;},
             PUZZLES:PUZZLES,sqi:sqi,HERO_SCENES:HERO_SCENES,

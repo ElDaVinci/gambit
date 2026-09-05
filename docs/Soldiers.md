@@ -18,22 +18,32 @@ Supersedes [[Battle Mechanics]], which is archived and still playable at
 | Queen | 15 |
 | **King** | **20** |
 
-The number is shown in a badge on the top-right corner of the piece. It turns brass
-once the unit has taken losses and red on its last soldier. **Damage is permanent** —
-there is no healing, and a promoted pawn cannot carry more soldiers than its new rank
-allows.
+The count is printed **on the piece itself** — dark digits on a white piece, light digits
+on a black one — sitting over the base, the one solidly-filled area every silhouette
+shares. It goes red on the last soldier. (An earlier version used a bubble badge in the
+corner; two things to scan per square was too much.) **Damage is permanent** — there is no
+healing, and a promoted pawn cannot carry more soldiers than its new rank allows.
 
-## 2. An attack is one duel
+## 2. An attack is an engagement of duels
 
-Attacking an enemy piece plays out **one duel and one only**:
+Attacking an enemy piece opens an **engagement**, fought one duel at a time:
 
 1. Each side sends one soldier. The attacker rolls its dice, the defender rolls one.
 2. Each keeps its **highest single die**. Higher wins. Ties re-roll.
-3. **Exactly one soldier dies — the loser's.**
-4. Nothing else happens. Both pieces stay exactly where they were, and the turn ends.
+3. **One soldier dies — the loser's.**
+4. **The attacker then chooses: press the attack, or break off.** Pressing fights another
+   duel against *the same piece*. There is no limit, and it is all one turn.
 
-A unit is destroyed only when its **last** soldier falls. At that moment the attacker
-advances onto the square, carrying its own remaining garrison with it.
+The engagement ends when the attacker breaks off, or when a garrison is emptied. A unit is
+destroyed only when its **last** soldier falls; at that moment the attacker advances onto
+the square, carrying its own remaining garrison with it. Break off instead and both pieces
+stay exactly where they were, keeping every loss.
+
+The attacker may only ever fight **the one piece it attacked** — an engagement cannot be
+turned against a different target.
+
+**This is what makes the game finish.** With one duel per turn a defender simply retreated
+and games ran 400–600 plies; self-play now ends in **26–141 plies**, decisively (see §7).
 
 ### Attacking dice
 
@@ -93,20 +103,24 @@ just captures) is what stops a stalemated board running forever.
   never trips it; two armies staring at each other eventually does.
 - Insufficient material no longer applies — any unit can grind down any other.
 
-## 7. What to watch in playtesting
+## 7. Pace, measured
 
-**Games are long.** Self-play at medium strength: 395–600 plies with ~200 casualties,
-against roughly 80 plies for ordinary chess. One game in three hit the 50-move draw
-without a king falling. Killing a fresh queen takes 15 winning duels; a king, 20.
+Sustained engagements fixed the pacing problem that one-duel-per-turn had:
 
-The lever is the garrison table in §1 — it lives in one place (`SOLDIERS` in
-`index.html`) and every probability and the computer opponent derive from it. Halving
-the numbers roughly halves the game. The dice ladder is a second lever.
+| | one duel per turn | engagements (current) |
+|---|---|---|
+| Game length | 395–600 plies | **26–141 plies** |
+| Decisive? | 1 of 3 drew on the 50-move rule | **4 of 4 ended with a king falling** |
+| Duels per attack | 1 | ~7 average |
 
-**A defender can walk away.** Because the attacker never advances on a won duel, a
-wounded piece can simply retreat next turn. Attacking is therefore harassment that
-forces a choice, not a commitment — a genuinely different game from the one-roll
-version, and the thing most worth feeling out.
+Ordinary chess is roughly 80 plies, so the game now sits in the right range. The reason is
+simple: a defender used to just retreat between turns, and nothing could ever be finished.
+
+**Still worth feeling out:** an engagement lets a strong attacker finish a weak piece in
+one turn, so big pieces are far more dominant than under one-duel-per-turn. The counter is
+that pressing a losing attack bleeds *your* garrison permanently, and breaking off early is
+often right. The levers, in order of bluntness, are the garrison table (§1), the dice
+ladder (§2), and capping duels per engagement.
 
 ## 8. Implementation notes
 

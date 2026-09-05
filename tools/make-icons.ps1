@@ -1,12 +1,25 @@
 # Generates Gambit's app icons as real PNGs via System.Drawing.
 # Run once; the PNGs are committed, so this script is only needed if the mark changes.
+#
+# Parameterised so an archived ruleset can get its own icon: same pawn mark on a
+# different ground, which is what tells two Gambit buttons apart on a home screen.
+#   .\make-icons.ps1                                   # the live game
+#   .\make-icons.ps1 -OutDir ..\archive\v21-dice-ladder\icons -Bg '#4A3B2A'
+param(
+    [string]$OutDir = '',
+    [string]$Bg     = '#2B3830'
+)
 Add-Type -AssemblyName System.Drawing
 
-$OutDir = Join-Path (Split-Path $PSScriptRoot -Parent) 'icons'
-if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Path $OutDir | Out-Null }
+if ([string]::IsNullOrWhiteSpace($OutDir)) {
+    $OutDir = Join-Path (Split-Path $PSScriptRoot -Parent) 'icons'
+} elseif (-not [System.IO.Path]::IsPathRooted($OutDir)) {
+    $OutDir = Join-Path $PSScriptRoot $OutDir
+}
+if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Path $OutDir -Force | Out-Null }
 
 # palette (matches the app's dark theme)
-$cBg     = [System.Drawing.ColorTranslator]::FromHtml('#2B3830')
+$cBg     = [System.Drawing.ColorTranslator]::FromHtml($Bg)
 $cPawn   = [System.Drawing.ColorTranslator]::FromHtml('#F7F3E6')
 $cBrass  = [System.Drawing.ColorTranslator]::FromHtml('#C8A24A')
 $cChecker= [System.Drawing.Color]::FromArgb(14, 240, 236, 220)

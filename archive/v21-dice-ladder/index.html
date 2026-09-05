@@ -7,17 +7,21 @@
 <title>Gambit v21 — dice ladder (archived)</title>
 <meta name="description" content="Standard chess, but every capture is decided by a roll of the dice. Lose the roll and your attacking piece is gone.">
 
-<!-- ARCHIVED SNAPSHOT — frozen 2026-09-05, do not edit.
+<!-- ARCHIVED SNAPSHOT — frozen 2026-09-05, do not edit the game itself.
      This is the game exactly as it played at v21 (attacking dice: Queen 3,
-     Rook/Bishop/Knight 2, Pawn 1; defender always 1). Kept playable so a new
-     mechanic can be compared against it side by side.
-     Deliberately NOT installable and NOT service-worker cached: an archive must
-     always be itself, never a newer version served from a shared cache.
-     Icons resolve one level up; there is no manifest link on purpose. -->
+     Rook/Bishop/Knight 2, Pawn 1; defender always 1).
+     It installs as its OWN app, separate from the live game: its own manifest,
+     its own icons on a brown ground, and its own service worker whose scope is
+     this folder only. The live game's worker skips every /archive/ path, so
+     neither can ever serve the other's files — an archive is always itself. -->
+<link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#ece9df" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#14161a" media="(prefers-color-scheme: dark)">
-<link rel="icon" href="../../icons/favicon-32.png" sizes="32x32" type="image/png">
-<link rel="apple-touch-icon" href="../../icons/apple-touch-icon.png">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Gambit v21">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -3252,9 +3256,14 @@ buildMenuArt();
 newGame();
 showMenu();          // the board waits behind the start screen
 
-/* No service worker here, on purpose. This is an archived snapshot: it must
-   always serve itself, never a newer build out of a shared cache. The live
-   game at ../../ registers the worker as normal. */
+/* This archive registers its OWN service worker, scoped to this folder, so it
+   installs to a home screen and runs offline as a separate app. It can only
+   ever serve its own frozen files. */
+if("serviceWorker" in navigator && location.protocol.indexOf("http")===0){
+  window.addEventListener("load", function(){
+    navigator.serviceWorker.register("sw.js").catch(function(){ /* offline unavailable */ });
+  });
+}
 
 window.__G={freshState:freshState,legalMoves:legalMoves,applyMove:applyMove,opp:opp,
             inCheck:inCheck,chooseBotMove:chooseBotMove,evaluate:evaluate,LEVELS:LEVELS,
