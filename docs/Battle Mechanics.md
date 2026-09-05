@@ -1,3 +1,8 @@
+> **SUPERSEDED as of v23 by [[Soldiers]].** Everything below describes the
+> one-roll-per-capture game, which is now archived and playable at
+> `/archive/v21-dice-ladder/`. The live game resolves captures as duels between
+> garrisons of soldiers. Read `Soldiers.md` first.
+
 # Battle Mechanics (v1 — locked)
 
 Standard chess in every respect **except the resolution of captures.** Movement, check,
