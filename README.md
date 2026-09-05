@@ -52,6 +52,7 @@ that string is the cache-busting key.
 | `manifest.webmanifest`, `sw.js`, `icons/` | PWA plumbing: install metadata, offline cache, app icons. |
 | `.nojekyll` | Stops GitHub Pages running Jekyll, which would otherwise ignore paths beginning with `_`. |
 | `gambit.artifact.html` | Generated copy for publishing as a Claude Artifact. Never edit by hand — run `bash tools/build-artifact.sh`. |
+| `archive/` | Frozen, still-playable snapshots of earlier rulesets. Never edit — see below. |
 | `tools/` | Dev scripts, not part of the app. See below. |
 | `docs/` | Obsidian vault — design, the locked ruleset, decisions, roadmap. Open `docs/` as a vault; start at `docs/Home.md`. |
 | `src/`, `assets/` | Reserved; unused so far. |
@@ -63,6 +64,23 @@ that string is the cache-busting key.
 | `serve.ps1` | Serves the folder at `http://localhost:8100`. Needed because service workers refuse to run from `file://`. Run: `powershell -File tools/serve.ps1` |
 | `make-icons.ps1` | Regenerates `icons/*.png` via System.Drawing. Only needed if the icon design changes. |
 | `build-artifact.sh` | Rebuilds `gambit.artifact.html` from `index.html`. Run after every change to the game. |
+
+## Archived rulesets
+
+Each time the core mechanic changes, the previous one is frozen here — as a **playable
+page**, not just a commit — so two mechanics can be compared side by side on a phone.
+
+| Ruleset | Play it | Git tag |
+|---|---|---|
+| **v21 — dice ladder** (Queen 3, Rook/Bishop/Knight 2, Pawn 1; defender always 1) | [`/archive/v21-dice-ladder/`](https://eldavinci.github.io/gambit/archive/v21-dice-ladder/) | `v21-dice-ladder` |
+
+Rules for the archive, so a snapshot stays trustworthy:
+
+- **Never edit a file under `archive/`.** It is a record of how the game actually played.
+- Snapshots deliberately have **no manifest and no service worker**, and `sw.js` skips any
+  path containing `/archive/`. Otherwise the worker's offline fallback could serve the
+  *current* `index.html` at an archive URL and quietly show the wrong game.
+- To restore one as the live game: `git checkout <tag> -- index.html`.
 
 ## Playing the computer
 

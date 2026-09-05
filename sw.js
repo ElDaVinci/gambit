@@ -7,7 +7,7 @@
  *   - other assets -> cache-first, since icons and the manifest rarely change
  *                     and this keeps launches instant.
  */
-const CACHE = "gambit-v21";
+const CACHE = "gambit-v22";
 
 const ASSETS = [
   "./",
@@ -44,6 +44,12 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;   // let Google Fonts etc. go to the network
+
+  /* Archived snapshots under /archive/ are frozen builds kept for comparison.
+     The worker's scope covers them, and its navigation fallback would happily
+     hand back the CURRENT index.html for an archive URL when offline — which
+     would silently show the wrong game. Never touch them. */
+  if (url.pathname.includes("/archive/")) return;
 
   if (req.mode === "navigate") {
     event.respondWith(

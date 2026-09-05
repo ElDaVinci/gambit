@@ -1,0 +1,3300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Gambit v21 — dice ladder (archived)</title>
+<meta name="description" content="Standard chess, but every capture is decided by a roll of the dice. Lose the roll and your attacking piece is gone.">
+
+<!-- ARCHIVED SNAPSHOT — frozen 2026-09-05, do not edit.
+     This is the game exactly as it played at v21 (attacking dice: Queen 3,
+     Rook/Bishop/Knight 2, Pawn 1; defender always 1). Kept playable so a new
+     mechanic can be compared against it side by side.
+     Deliberately NOT installable and NOT service-worker cached: an archive must
+     always be itself, never a newer version served from a shared cache.
+     Icons resolve one level up; there is no manifest link on purpose. -->
+<meta name="theme-color" content="#ece9df" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14161a" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="../../icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="../../icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* ============================================================ GAMBIT
+   Dice Chess — standard chess, but every capture is decided by a dice battle.
+   Single self-contained file. Vanilla JS. Works desktop + mobile.
+   ============================================================ */
+
+:root{
+  --bg:#ece9df; --surface:#f6f4ec; --surface-2:#e5e0d0; --line:#cec8b5;
+  --ink:#23261f; --ink-soft:#585b4e; --muted:#84887a;
+  --brass:#a9822f; --brass-bright:#c8a24a;
+  --repel:#b0402f; --advance:#5c7f52;
+  --board-light:#e1d9c4; --board-dark:#55675a;
+  --piece-white:#fdfbf3; --piece-white-stroke:#433d2e;
+  --piece-black:#14150f; --piece-black-stroke:#efe9d4;
+  --sel:rgba(169,130,47,.32); --dot:rgba(92,127,82,.55);
+  --lastFrom:rgba(169,130,47,.14); --lastTo:rgba(169,130,47,.40); --lastEdge:rgba(169,130,47,.85);
+  --check:rgba(176,64,47,.30);
+  --shadow:0 1px 2px rgba(30,32,24,.06),0 8px 30px rgba(30,32,24,.10);
+  --radius:10px;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#14161a; --surface:#1c1f25; --surface-2:#262a31; --line:#343943;
+    --ink:#e8e5d9; --ink-soft:#b1ac9c; --muted:#888d97;
+    --brass:#c8a24a; --brass-bright:#e0bd66;
+    --repel:#d15a4b; --advance:#7aa970;
+    --board-light:#cbc0a5; --board-dark:#39493f;
+    --piece-white:#f8f4e8; --piece-white-stroke:#2c2921;
+    --piece-black:#131410; --piece-black-stroke:#e0d9c2;
+    --sel:rgba(224,189,102,.30); --dot:rgba(122,169,112,.60);
+    --lastFrom:rgba(224,189,102,.13); --lastTo:rgba(224,189,102,.36); --lastEdge:rgba(224,189,102,.90);
+    --check:rgba(209,90,75,.34);
+    --shadow:0 1px 2px rgba(0,0,0,.25),0 10px 34px rgba(0,0,0,.40);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#14161a; --surface:#1c1f25; --surface-2:#262a31; --line:#343943;
+  --ink:#e8e5d9; --ink-soft:#b1ac9c; --muted:#888d97;
+  --brass:#c8a24a; --brass-bright:#e0bd66;
+  --repel:#d15a4b; --advance:#7aa970;
+  --board-light:#cbc0a5; --board-dark:#39493f;
+  --piece-white:#f8f4e8; --piece-white-stroke:#2c2921;
+  --piece-black:#131410; --piece-black-stroke:#e0d9c2;
+  --sel:rgba(224,189,102,.30); --dot:rgba(122,169,112,.60);
+    --lastFrom:rgba(224,189,102,.13); --lastTo:rgba(224,189,102,.36); --lastEdge:rgba(224,189,102,.90);
+  --check:rgba(209,90,75,.34);
+  --shadow:0 1px 2px rgba(0,0,0,.25),0 10px 34px rgba(0,0,0,.40);
+}
+
+/* ================= opening animation =================
+   The board tiles in square by square, the full 32-piece starting position
+   drops onto it rank by rank, three dice tumble down and settle on faces, then
+   the wordmark resolves. Skippable, and skipped entirely under reduced-motion. */
+.splash{position:fixed;inset:0;z-index:200;display:grid;place-items:center;
+  background:var(--bg);transition:opacity .45s ease, visibility .45s}
+.splash.done{opacity:0;visibility:hidden;pointer-events:none}
+.splashInner{position:relative;display:flex;flex-direction:column;align-items:center}
+.splashBoard{display:grid;grid-template-columns:repeat(8,1fr);
+  width:min(62vw,232px);aspect-ratio:1;border-radius:8px;overflow:hidden;
+  box-shadow:0 18px 40px -18px rgba(0,0,0,.55)}
+/* Everything is visible by default and the animation is layered on top under
+   .animate. Never rely on animation-fill-mode to REACH the visible state: if
+   animations are disabled or cut short, the splash would stay blank. */
+.splashBoard i{display:block;aspect-ratio:1}
+/* Piece overlay: a full 8x8 grid sitting exactly on the board, holding all 32
+   starting pieces (empty cells are bare <i> spacers). */
+.splashRank{position:absolute;top:0;left:50%;transform:translateX(-50%);
+  width:min(62vw,232px);height:min(62vw,232px);pointer-events:none;
+  display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr)}
+.splashRank svg{width:100%;height:100%;padding:9%}
+.splashRank i{display:block}
+/* Dice layer: same footprint as the board; each die is centred on a square via
+   left/top percentages and a negative margin of half its size. Die size is a
+   fraction of the board, so it stays ~0.7 of a square at every screen width. */
+.splashDice{position:absolute;top:0;left:50%;transform:translateX(-50%);
+  --bd:min(62vw,232px);width:var(--bd);height:var(--bd);pointer-events:none;
+  --dieS:calc(var(--bd) * .086)}
+.splashDie{position:absolute;width:var(--dieS);height:var(--dieS);
+  margin:calc(var(--dieS) / -2) 0 0 calc(var(--dieS) / -2);
+  perspective:calc(var(--dieS) * 22);transform-style:preserve-3d}
+.splashDie .dieBox{--half:calc(var(--dieS) / 2);width:var(--dieS);height:var(--dieS);
+  transition:transform .95s cubic-bezier(.13,.86,.24,1)}
+.splashDie .dieShadow{top:calc(var(--dieS) * 1.04);width:calc(var(--dieS) * .82);
+  height:calc(var(--dieS) * .3);opacity:.4}
+.splashMark{font-family:"Zilla Slab",Georgia,serif;font-weight:700;
+  font-size:clamp(30px,9vw,44px);letter-spacing:.01em;margin:20px 0 0;color:var(--ink)}
+.splashSub{margin:5px 0 0;font-size:12.5px;letter-spacing:.05em;color:var(--muted)}
+
+.splash.animate .splashBoard i{opacity:0;transform:scale(.35);
+  animation:tileIn .42s cubic-bezier(.2,.9,.3,1) forwards}
+.splash.animate .splashRank svg{opacity:0;transform:translateY(-26px);
+  animation:dropIn .5s cubic-bezier(.24,1.2,.4,1) forwards}
+.splash.animate .splashDie{opacity:0;
+  animation:diceThrow var(--thr,.84s) cubic-bezier(.19,.7,.32,1) forwards}
+.splash.animate .splashDie .dieShadow{opacity:0;animation:diceShadow var(--thr,.84s) ease-out forwards}
+.splash.animate .splashMark{opacity:0;animation:markIn .55s ease-out 1.5s forwards}
+.splash.animate .splashSub{opacity:0;animation:markIn .55s ease-out 1.7s forwards}
+.splashSkip{position:absolute;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));
+  font:inherit;font-size:12px;color:var(--muted);background:none;border:0;
+  padding:8px 10px;cursor:pointer;letter-spacing:.06em;text-transform:uppercase}
+.splashSkip:hover{color:var(--ink)}
+@keyframes tileIn{to{opacity:1;transform:none}}
+@keyframes dropIn{to{opacity:1;transform:none}}
+@keyframes markIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+/* A thrown die: it flies in low and fast from off the board (--fromX/--fromY),
+   skips off the surface, then bounces twice with the height and speed dying
+   away, and settles at a slight angle (--rz). Per-segment timing functions give
+   it real bounce physics — decelerate up to each apex, accelerate back down.
+   The cube's own tumble rides on rollDie() + the .dieBox transition. */
+@keyframes diceThrow{
+  0%  {opacity:0;transform:translate(var(--fromX,120px),var(--fromY,88px)) rotate(calc(var(--rz,0deg) * -2));
+       animation-timing-function:cubic-bezier(.33,0,.4,1)}   /* in flight, coasting to first contact */
+  10% {opacity:1}
+  44% {transform:translate(calc(var(--fromX,120px) * -0.05),-16px) rotate(calc(var(--rz,0deg) * -0.5));
+       animation-timing-function:cubic-bezier(.6,0,.9,.4)}   /* apex of the incoming arc — then drop, accelerating */
+  60% {transform:translate(0,4px) rotate(var(--rz,0deg));
+       animation-timing-function:cubic-bezier(.1,.6,.3,1)}   /* hard skip off the board, kicks back up */
+  73% {transform:translate(0,-9px) rotate(var(--rz,0deg));
+       animation-timing-function:cubic-bezier(.7,0,.9,.5)}   /* bounce apex, falls again */
+  84% {transform:translate(0,2px) rotate(var(--rz,0deg));
+       animation-timing-function:cubic-bezier(.1,.6,.3,1)}   /* second, smaller skip */
+  92% {transform:translate(0,-3px) rotate(var(--rz,0deg));
+       animation-timing-function:cubic-bezier(.6,0,.5,1)}
+  100%{opacity:1;transform:translate(0,0) rotate(var(--rz,0deg))}
+}
+@keyframes diceShadow{
+  0%,38% {opacity:0;transform:translateX(-50%) scale(.3)}
+  58%    {opacity:.5;transform:translateX(-50%) scaleX(1.45) scaleY(.7)}  /* splat under the first skip */
+  73%    {opacity:.24;transform:translateX(-50%) scale(.8)}               /* shrinks away under the bounce */
+  84%    {opacity:.4;transform:translateX(-50%) scaleX(1.15) scaleY(.9)}  /* second, softer splat */
+  100%   {opacity:.4;transform:translateX(-50%) scale(1)}
+}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  line-height:1.5; -webkit-text-size-adjust:100%;
+  padding:max(16px,env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+}
+.app{max-width:1000px;margin:0 auto}
+
+/* ---- masthead ---- */
+.masthead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.backBtn{font:inherit;font-size:19px;line-height:1;color:var(--ink-soft);
+  background:var(--surface);border:1px solid var(--line);border-radius:10px;
+  width:38px;height:38px;display:grid;place-items:center;cursor:pointer;flex:none;
+  box-shadow:var(--shadow)}
+.backBtn:hover{color:var(--brass);border-color:var(--brass)}
+.backBtn:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+.backBtn[hidden],.gearBtn[hidden]{display:none}
+.wordmark{font-family:"Zilla Slab",Georgia,serif;font-weight:700;font-size:26px;letter-spacing:.01em;margin:0;line-height:1}
+.wordmark .die{color:var(--brass)}
+.tagline{color:var(--muted);font-size:13.5px;margin:0}
+.tagline[hidden]{display:none}
+.mast-spacer{flex:1 1 40px}
+.icon-btn{
+  font:inherit;color:var(--ink-soft);background:var(--surface);border:1px solid var(--line);
+  border-radius:8px;padding:6px 10px;cursor:pointer;font-size:14px;line-height:1;display:inline-flex;
+  align-items:center;gap:6px;box-shadow:var(--shadow)
+}
+.icon-btn:hover{color:var(--ink);border-color:var(--brass)}
+.icon-btn:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+
+/* ---- game grid ---- */
+.game{display:grid;grid-template-columns:minmax(300px,1fr) 296px;gap:22px;align-items:start}
+/* an author display value outranks the UA [hidden] rule — restate it */
+.game[hidden]{display:none}
+@media (max-width:800px){ .game{grid-template-columns:1fr;gap:16px} }
+
+/* ---- board ---- */
+.board-wrap{width:100%;max-width:min(76vh,560px);margin-inline:auto}
+@media (max-width:800px){ .board-wrap{max-width:min(94vw,520px)} }
+/* ---- start screen ---- */
+.menu{max-width:520px;margin:6px auto 0;display:flex;flex-direction:column;gap:10px}
+.menu[hidden]{display:none}
+.menuGroup{margin:8px 0 0;font-size:11px;font-weight:600;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--muted)}
+
+/* ---- the pitch: a live capture being decided ---- */
+.hero{background:var(--surface);border:1px solid var(--line);border-radius:16px;
+  padding:16px;box-shadow:var(--shadow);display:flex;flex-direction:column;align-items:center;gap:4px}
+.heroStage{display:flex;align-items:center;justify-content:center;gap:clamp(14px,5vw,30px);
+  flex-wrap:wrap}
+.heroBoard{display:grid;grid-template-columns:repeat(3,1fr);
+  width:132px;border-radius:8px;overflow:hidden;
+  box-shadow:0 8px 22px -12px rgba(0,0,0,.6);flex:none}
+.heroBoard .hsq{position:relative;aspect-ratio:1;display:grid;place-items:center}
+/* Full-size with padding, so translateY(-100%) is exactly one square. At 78%
+   the attacker only travelled 0.78 of a square and came to rest between two. */
+.heroBoard .hsq svg{width:100%;height:100%;padding:11%;box-sizing:border-box;
+  transition:transform .34s cubic-bezier(.22,.68,.28,1), opacity .3s}
+.heroBoard .hsq.target::after{content:"";position:absolute;inset:8%;border-radius:50%;
+  border:3px solid var(--repel);box-shadow:0 0 8px -1px var(--repel);
+  animation:targetPulse 1.6s ease-in-out infinite;transition:opacity .25s}
+.heroBoard .hsq.resolved::after{opacity:0;animation:none}
+@keyframes targetPulse{0%,100%{opacity:.5}50%{opacity:1}}
+.heroBoard svg.falls{opacity:0;transform:scale(.55) rotate(-14deg)}
+.heroRoll{display:flex;align-items:center;gap:12px}
+.heroSide{display:flex;gap:8px}
+/* .dieWrap / .dieBox are defined later in this stylesheet, so these need the
+   extra class to win — otherwise the hero dice inherit the overlay's 64px. */
+.heroRoll .dieWrap,.heroRoll .dieBox{width:52px;height:52px;--half:26px}
+.heroRoll .dieShadow{width:42px;top:57px}
+/* A die must never be allowed to shrink: flex items shrink below their stated
+   width by default, and when the Queen's third die arrived the row silently
+   crushed one to zero rather than overflowing. Fixed size, then scale the whole
+   row down for a three-die attacker so it still fits beside the mini board. */
+.heroRoll .dieWrap{flex:0 0 auto}
+.heroRoll[data-atk="3"] .heroSide{gap:6px}
+.heroRoll[data-atk="3"] .dieWrap,
+.heroRoll[data-atk="3"] .dieBox{width:42px;height:42px;--half:21px}
+.heroRoll[data-atk="3"] .dieShadow{width:34px;top:46px}
+.heroVs{font-family:"Zilla Slab",Georgia,serif;font-size:13px;color:var(--muted);
+  letter-spacing:.08em}
+.heroVerdict{margin:16px 0 0;font-family:"Zilla Slab",Georgia,serif;font-weight:700;
+  font-size:17px;min-height:1.3em;transition:color .2s}
+.heroVerdict.win{color:var(--advance)}
+.heroVerdict.lose{color:var(--repel)}
+.heroCaption{margin:2px 0 0;font-size:13px;color:var(--ink-soft);text-align:center;
+  line-height:1.5;text-wrap:balance;max-width:38ch}
+.heroCaption em{font-style:normal;color:var(--repel);font-weight:600}
+/* On a phone the hero must not eat the screen the tiles need. */
+@media (max-width:430px){
+  .hero{padding:12px;border-radius:14px}
+  .heroBoard{width:104px}
+  .heroRoll .dieWrap,.heroRoll .dieBox{width:44px;height:44px;--half:22px}
+  .heroRoll .dieShadow{width:36px;top:48px}
+  .heroRoll[data-atk="3"] .heroSide{gap:5px}
+  .heroRoll[data-atk="3"] .dieWrap,
+  .heroRoll[data-atk="3"] .dieBox{width:32px;height:32px;--half:16px}
+  .heroRoll[data-atk="3"] .dieShadow{width:26px;top:35px}
+  .heroStage{gap:16px}
+  .heroVerdict{margin-top:12px;font-size:15px}
+  .heroCaption{font-size:12.5px}
+  .mode{padding:12px}
+  .mIcon{width:36px;height:36px}
+  .mDesc{font-size:12px}
+}
+.modeGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mode{
+  font:inherit;text-align:left;cursor:pointer;color:var(--ink);
+  background:var(--surface);border:1px solid var(--line);border-radius:14px;
+  padding:14px;display:flex;flex-direction:column;gap:3px;box-shadow:var(--shadow);
+  transition:border-color .15s, transform .12s
+}
+.mode:hover{border-color:var(--brass);transform:translateY(-2px)}
+.mode:active{transform:none}
+.mode:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+/* The icon sits on a board square, so each tile reads as a chess tile. Rising
+   piece value doubles as the difficulty scale: pawn, knight, rook, queen. */
+.mIcon{width:42px;height:42px;border-radius:9px;display:grid;place-items:center;
+  background:var(--board-dark);flex:none;position:relative}
+.mIcon[data-sq="light"]{background:var(--board-light)}
+.mIcon svg{width:76%;height:76%}
+.mIcon.pair{gap:0}
+.mIcon.pair svg{width:56%;height:56%;position:absolute}
+.mIcon.pair svg:first-child{transform:translate(-24%,-8%)}
+.mIcon.pair svg:last-child{transform:translate(24%,8%)}
+.mName{font-weight:600;font-size:15px}
+.mDesc{font-size:12.5px;color:var(--muted);line-height:1.35;text-wrap:balance}
+.mode.wide{flex-direction:row;align-items:center;gap:14px;padding:15px 16px}
+.mode.wide .mBody{display:flex;flex-direction:column;gap:2px}
+.mode.train{background:linear-gradient(180deg,var(--surface),var(--surface-2));
+  border-color:color-mix(in srgb,var(--brass) 45%,var(--line))}
+/* flat die face, for the training tile */
+.mIcon.die{background:linear-gradient(150deg,#fbf7ea,#e6dcc2);
+  border:1px solid rgba(90,80,55,.30);
+  display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);
+  padding:7px;gap:1px}
+.mIcon.die span{display:grid;place-items:center}
+.mIcon.die i{width:7px;height:7px;border-radius:50%;
+  background:radial-gradient(circle at 34% 30%,#5d5340,#241f16)}
+
+/* ---- training ---- */
+.trainBar{margin:0 0 10px;background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--radius);padding:13px 14px;box-shadow:var(--shadow);
+  display:flex;flex-direction:column;gap:8px}
+.trainBar[hidden]{display:none}
+.trainActions{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+.trainActions[hidden]{display:none}
+#rulesActions[hidden],#puzzleActionsRow[hidden],#pzNote[hidden]{display:none}
+.tStep{font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--brass)}
+.tTitle{font-family:"Zilla Slab",Georgia,serif;font-weight:600;font-size:17px;margin:0}
+.tText{margin:0;font-size:13.5px;color:var(--ink-soft);line-height:1.5;text-wrap:balance}
+.tTask{margin:0;font-size:13px;padding:8px 10px;border-radius:8px;
+  background:var(--surface-2);border-left:3px solid var(--brass)}
+.tTask.done{border-left-color:var(--advance);color:var(--advance);font-weight:600}
+.tActions{display:flex;gap:8px}
+.tActions .btn{flex:1;justify-content:center}
+/* coach prompt above the board — turn, one bold line, one plain line */
+.coach{display:flex;gap:11px;align-items:flex-start}
+.coachChip{width:22px;height:22px;flex:none;border-radius:6px;border:1px solid var(--line);
+  margin-top:1px}
+.coachChip.w{background:var(--piece-white)}
+.coachChip.b{background:var(--piece-black)}
+.coachBody{min-width:0}
+.coachTitle{margin:0;font-weight:600;font-size:15px}
+.coachText{margin:3px 0 0;font-size:13.5px;color:var(--ink-soft);line-height:1.45;
+  text-wrap:balance}
+.coachText.done{color:var(--advance);font-weight:600}
+.coachText.miss{color:var(--repel)}
+.coachMeta{margin:5px 0 0;font-family:"IBM Plex Mono",monospace;font-size:11px;
+  color:var(--muted);letter-spacing:.04em}
+.setGroup{margin:4px 0 0;font-size:11px;font-weight:600;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--muted)}
+.trainSettings{display:flex;flex-direction:column;gap:8px}
+.trainSettings[hidden]{display:none}
+#setGroupGame[hidden]{display:none}
+.tTabs{display:flex;gap:6px;margin-bottom:2px}
+.tTab{flex:1;font:inherit;font-size:12.5px;font-weight:600;color:var(--muted);
+  background:var(--surface-2);border:1px solid var(--line);border-radius:8px;
+  padding:7px;cursor:pointer}
+.tTab.on{background:var(--brass);color:#1a1710;border-color:transparent}
+.tTab:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+.pzDiff{display:flex;gap:6px;margin-bottom:8px}
+.pzLvl{flex:1;font:inherit;font-size:12px;color:var(--ink-soft);background:transparent;
+  border:1px solid var(--line);border-radius:7px;padding:6px;cursor:pointer}
+.pzLvl.on{border-color:var(--brass);color:var(--brass);font-weight:600}
+.pzLvl:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+.pzHead{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.pzGoal{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--brass);
+  font-weight:600;letter-spacing:.06em}
+.pzNote{margin:8px 0 0;font-size:11.5px;color:var(--muted);line-height:1.4}
+#rulesPane[hidden],#puzzlePane[hidden]{display:none}
+/* the square a hint points at */
+.sq.hintFrom::after{content:"";position:absolute;inset:0;z-index:2;
+  box-shadow:inset 0 0 0 4px var(--brass);border-radius:2px;
+  animation:hintPulse 1.1s ease-in-out infinite}
+@keyframes hintPulse{0%,100%{opacity:.55}50%{opacity:1}}
+/* A rejected puzzle move: the square it came from is tinted, the square it
+   landed on is ringed red. The board is frozen until the player hits Retry —
+   the position stays up so the mistake can actually be looked at. */
+.sq.missFrom::after{content:"";position:absolute;inset:0;z-index:2;
+  background:rgba(209,90,75,.22)}
+.sq.missTo::after{content:"";position:absolute;inset:0;z-index:3;
+  box-shadow:inset 0 0 0 4px var(--repel);border-radius:2px;
+  animation:missPulse 1.3s ease-in-out 3}
+@keyframes missPulse{0%,100%{opacity:.62}50%{opacity:1}}
+@media (prefers-reduced-motion:reduce){ .sq.missTo::after{animation:none;opacity:1} }
+
+/* ---- player cards (opponent above the board, you below) ---- */
+.playerCard{display:flex;align-items:center;gap:9px;padding:7px 10px;min-height:46px;
+  background:var(--surface);border:1px solid var(--line);border-radius:10px}
+/* hidden during training — a puzzle has no material tally worth showing, and
+   the two cards cost ~104px that the prompt and buttons need on a phone */
+.playerCard[hidden]{display:none}
+#cardTop{margin-bottom:6px}
+#cardBottom{margin-top:6px}
+.playerCard.toMove{border-color:var(--brass);
+  box-shadow:0 0 0 1px var(--brass), 0 0 12px -4px var(--brass)}
+.pcAvatar{width:30px;height:30px;flex:none;border-radius:8px;display:grid;place-items:center;
+  border:1px solid var(--line);background:var(--surface-2)}
+.pcAvatar svg{width:22px;height:22px}
+.pcName{font-weight:600;font-size:13.5px;white-space:nowrap}
+.pcName .sub{font-weight:400;color:var(--muted);font-size:12px}
+.pcTaken{display:flex;flex-wrap:wrap;gap:0;flex:1;min-width:0;align-items:center}
+.pcTaken svg{width:15px;height:15px;margin-right:-4px}
+.pcAdv{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-soft);
+  font-variant-numeric:tabular-nums;flex:none}
+
+/* ---- board controls ---- */
+.boardTools{display:flex;gap:8px;margin-top:10px}
+.tool{flex:1;font:inherit;font-size:12.5px;font-weight:500;color:var(--ink-soft);
+  background:var(--surface);border:1px solid var(--line);border-radius:10px;
+  padding:9px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px}
+.tool:hover:not(:disabled){color:var(--ink);border-color:var(--brass)}
+.tool:disabled{opacity:.4;cursor:default}
+.tool:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+.tool .tIcon{font-size:15px;line-height:1}
+.tool.primaryTool{background:var(--brass);color:#1a1710;border-color:transparent;font-weight:600}
+.tool.primaryTool:hover{background:var(--brass-bright);color:#1a1710}
+
+.board{
+  display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);
+  aspect-ratio:1;border:1px solid var(--line);border-radius:6px;overflow:hidden;box-shadow:var(--shadow);
+  /* none, not manipulation: a touch starting on the board must drag a piece,
+     never pan or rubber-band the page underneath it */
+  touch-action:none;
+  overscroll-behavior:contain;
+}
+.sq{
+  position:relative;border:0;padding:0;margin:0;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-size:clamp(22px,7.4vw,44px);line-height:1;
+  background:var(--board-light);
+  -webkit-tap-highlight-color:transparent;
+  touch-action:none;
+  -webkit-user-select:none;user-select:none;
+  -webkit-touch-callout:none;   /* no long-press callout mid-drag on iOS */
+}
+.sq.dark{background:var(--board-dark)}
+.sq:disabled{cursor:default}
+.sq:focus-visible{outline:2px solid var(--brass);outline-offset:-3px;z-index:3}
+/* Pieces are inline SVG, not font glyphs — font glyphs render as colour emoji
+   on some platforms and ignore CSS colour entirely. */
+.glyph{
+  fill:var(--piece-white);
+  stroke:var(--piece-white-stroke);
+  stroke-width:1.6;
+  stroke-linejoin:round;
+  overflow:visible;
+}
+.glyph.b{ fill:var(--piece-black); stroke:var(--piece-black-stroke) }
+.sq .glyph{
+  position:relative;z-index:2;
+  width:80%;height:80%;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.35));
+  transition:transform .12s ease;
+}
+.sq.pickable .glyph{cursor:pointer}
+.sq.pickable:hover .glyph{transform:translateY(-2px)}
+.sq.sel::after{content:"";position:absolute;inset:0;background:var(--sel);z-index:1}
+/* Last move: the square the piece LEFT is outlined and hollow; the square it
+   ARRIVED on is filled and pulses. Reading order is unmistakable at a glance. */
+.sq.lastFrom::before{content:"";position:absolute;inset:0;z-index:0;
+  background:var(--lastFrom);box-shadow:inset 0 0 0 3px var(--lastEdge)}
+.sq.lastTo::before{content:"";position:absolute;inset:0;z-index:0;
+  background:var(--lastTo);box-shadow:inset 0 0 0 3px var(--lastEdge)}
+.sq.lastTo.pulse::before{animation:arrive 1.5s ease-out 1}
+@keyframes arrive{
+  0%{box-shadow:inset 0 0 0 3px var(--lastEdge),0 0 0 0 var(--lastEdge)}
+  55%{box-shadow:inset 0 0 0 3px var(--lastEdge),0 0 0 9px transparent}
+  100%{box-shadow:inset 0 0 0 3px var(--lastEdge),0 0 0 0 transparent}
+}
+/* drag & drop */
+.sq.dropTarget::after{content:"";position:absolute;inset:0;z-index:1;
+  background:var(--sel);box-shadow:inset 0 0 0 3px var(--brass)}
+.sq.dragSource .glyph{opacity:.28}
+.dragGhost{position:fixed;z-index:60;pointer-events:none;width:64px;height:64px;
+  transform:translate(-50%,-50%) scale(1.12);filter:drop-shadow(0 6px 10px rgba(0,0,0,.42))}
+body.dragging{cursor:grabbing;-webkit-user-select:none;user-select:none;
+  overflow:hidden;touch-action:none;overscroll-behavior:none}
+body.dragging .sq{cursor:grabbing}
+.sq.check::after{content:"";position:absolute;inset:0;background:var(--check);z-index:1;
+  box-shadow:inset 0 0 0 3px var(--repel)}
+.sq .move-dot{position:absolute;width:26%;height:26%;border-radius:50%;background:var(--dot);z-index:1}
+.sq .capture-ring{position:absolute;inset:8%;border-radius:50%;border:3px solid var(--dot);z-index:1}
+/* Coordinates sit inside the board edge rather than in outer gutters — the
+   standard chess-app treatment, and it gives the board more room on a phone. */
+.sq .coord{position:absolute;font-family:"IBM Plex Mono",monospace;font-size:9px;
+  font-weight:500;line-height:1;z-index:3;pointer-events:none;opacity:.75}
+.sq .coord.file{right:3px;bottom:2px}
+.sq .coord.rank{left:3px;top:2px}
+.sq .coord{color:var(--board-dark)}
+.sq.dark .coord{color:var(--board-light)}
+
+/* ---- settings sheet ---- */
+.gearBtn{font-size:17px;padding:8px 11px}
+.sheet{position:fixed;inset:0;z-index:70;display:grid;place-items:start center;
+  padding:14px;background:color-mix(in srgb,var(--bg) 68%,transparent);
+  backdrop-filter:blur(3px);overflow-y:auto}
+.sheet[hidden]{display:none}
+.sheetPanel{width:min(420px,94vw);margin-top:56px;background:var(--surface);
+  border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:var(--shadow);
+  display:flex;flex-direction:column;gap:12px}
+.sheetHead{display:flex;align-items:center;justify-content:space-between}
+.sheetHead h2{font-family:"Zilla Slab",Georgia,serif;font-weight:600;font-size:19px;margin:0}
+.sheetRules{padding:0 12px;background:var(--surface-2)}
+#rotateRow[hidden]{display:none}
+
+/* ---- game review ---- */
+.reviewBar{margin-top:12px;background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow);
+  display:flex;flex-direction:column;gap:9px}
+.reviewBar[hidden]{display:none}
+.rvNav{display:flex;align-items:center;justify-content:center;gap:8px}
+.rbtn{font:inherit;font-size:14px;line-height:1;color:var(--ink);background:var(--surface-2);
+  border:1px solid var(--line);border-radius:8px;padding:8px 12px;cursor:pointer;min-width:44px}
+.rbtn:hover:not(:disabled){border-color:var(--brass);color:var(--brass)}
+.rbtn:disabled{opacity:.35;cursor:default}
+.rbtn:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+.rvCount{font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--ink-soft);
+  min-width:74px;text-align:center;font-variant-numeric:tabular-nums}
+.rvDesc{margin:0;text-align:center;font-size:13px;color:var(--ink-soft);min-height:2.6em;
+  text-wrap:balance}
+.rvDesc .ok{color:var(--advance);font-weight:600}
+.rvDesc .no{color:var(--repel);font-weight:600}
+.rvActions{display:flex;gap:8px}
+.rvActions .btn{flex:1;justify-content:center}
+.rvGhost{background:transparent}
+/* ---- rail ---- */
+.rail{display:flex;flex-direction:column;gap:14px;min-width:0}
+.rail[hidden]{display:none}   /* hidden in training: board and prompt only */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow)}
+.card h2{
+  font-family:"IBM Plex Sans";font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--muted);margin:0 0 8px
+}
+.status-line{font-family:"Zilla Slab",Georgia,serif;font-weight:600;font-size:19px;margin:0;text-wrap:balance}
+.status-sub{color:var(--ink-soft);font-size:13px;margin:5px 0 0}
+.turn-chip{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--ink-soft);margin-top:9px}
+.turn-chip .dot{width:11px;height:11px;border-radius:50%;border:1px solid var(--line)}
+.turn-chip .dot.w{background:var(--piece-white)}
+.turn-chip .dot.b{background:var(--piece-black)}
+
+.controls{display:flex;flex-direction:column;gap:8px}
+.opponentBox{display:flex;flex-direction:column;gap:8px}
+.opponentBox[hidden]{display:none}   /* author display outranks the UA [hidden] rule */
+.btn{
+  font:inherit;font-weight:500;color:var(--ink);background:var(--surface-2);border:1px solid var(--line);
+  border-radius:8px;padding:9px 12px;cursor:pointer;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:8px
+}
+.btn:hover{border-color:var(--brass)}
+.btn:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+.btn.primary{background:var(--brass);color:#1a1710;border-color:transparent;font-weight:600;justify-content:center}
+.btn.primary:hover{background:var(--brass-bright)}
+.switch{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13.5px;color:var(--ink-soft);padding:2px 0}
+.switch input{width:0;height:0;opacity:0;position:absolute}
+.switch .track{width:38px;height:22px;border-radius:11px;background:var(--surface-2);border:1px solid var(--line);position:relative;flex:none;transition:background .15s}
+.switch .track::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--muted);transition:transform .15s,background .15s}
+.fields{display:flex;flex-direction:column;gap:8px;padding:2px 0 4px}
+/* an author display value outranks the UA [hidden] rule, so restate it */
+.fields[hidden]{display:none}
+.field{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13.5px;color:var(--ink-soft)}
+.field select{
+  font:inherit;font-size:13px;color:var(--ink);background:var(--surface-2);
+  border:1px solid var(--line);border-radius:7px;padding:5px 8px;cursor:pointer;min-width:112px
+}
+.field select:hover{border-color:var(--brass)}
+.field select:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+.thinking{display:inline-flex;align-items:center;gap:7px;color:var(--brass);font-size:13px;margin-top:9px}
+.thinking .pulse{width:8px;height:8px;border-radius:50%;background:var(--brass);animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.3}50%{opacity:1}}
+.switch input:checked+.track{background:color-mix(in srgb,var(--brass) 40%,var(--surface-2))}
+.switch input:checked+.track::after{transform:translateX(16px);background:var(--brass)}
+.switch input:focus-visible+.track{outline:2px solid var(--brass);outline-offset:2px}
+
+.graves{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grave h3{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 4px}
+.grave .row{display:flex;flex-wrap:wrap;gap:1px;min-height:22px}
+.grave .glyph{width:20px;height:20px;stroke-width:2}
+.grave .adv{font-size:11px;color:var(--muted);font-family:"IBM Plex Mono",monospace}
+
+/* Move list in numbered rows with a White and a Black column, as chess apps do,
+   rather than one row per ply — twice as compact and far easier to scan. */
+.log{font-family:"IBM Plex Mono",monospace;font-size:12.5px;max-height:240px;overflow-y:auto}
+.moveRow{display:grid;grid-template-columns:2.2em 1fr 1fr;gap:4px;align-items:stretch}
+.moveRow:nth-child(odd){background:var(--surface-2)}
+.moveRow .n{color:var(--muted);padding:4px 2px 4px 5px;font-variant-numeric:tabular-nums}
+.ply{padding:4px 6px;border-radius:5px;cursor:pointer;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.ply:hover{background:color-mix(in srgb,var(--brass) 18%,transparent)}
+.ply.at{background:color-mix(in srgb,var(--brass) 30%,transparent);
+  box-shadow:inset 2px 0 0 var(--brass)}
+.ply.blank{cursor:default}
+.ply.blank:hover{background:none}
+.ply .ok{color:var(--advance)}
+.ply .no{color:var(--repel)}
+.log .empty{color:var(--muted)}
+
+details.rules{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:0 14px;box-shadow:var(--shadow)}
+details.rules summary{cursor:pointer;padding:13px 0;font-family:"IBM Plex Sans";font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);list-style:none;display:flex;justify-content:space-between;align-items:center}
+details.rules summary::-webkit-details-marker{display:none}
+details.rules summary::after{content:"+";font-size:15px}
+details.rules[open] summary::after{content:"\2013"}
+details.rules .body{padding:0 0 14px;font-size:13px;color:var(--ink-soft)}
+details.rules .body ul{margin:6px 0;padding-left:18px}
+details.rules .body li{margin:3px 0}
+
+/* ---- battle overlay ---- */
+.overlay{position:fixed;inset:0;z-index:50;display:none;place-items:center;padding:16px;
+  background:color-mix(in srgb,var(--bg) 62%,transparent);backdrop-filter:blur(3px);
+  overflow-y:auto;overscroll-behavior:contain}
+.overlay.show{display:grid}
+.battle{
+  width:min(360px,92vw);background:var(--surface);border:1px solid var(--line);border-radius:16px;
+  box-shadow:var(--shadow);padding:20px;text-align:center;
+  max-height:calc(100dvh - 32px);
+}
+/* Short viewports (a phone in portrait with browser chrome): tighten everything
+   so the dice and the Continue button are on screen at the same time. */
+@media (max-height:720px), (max-width:420px){
+  .battle{padding:14px}
+  .battle .versus{margin:6px 0 2px}
+  .battle .versus .glyph{width:34px;height:34px}
+  .battle .roles{margin-bottom:6px}
+  .dice{gap:26px;margin:8px 0 2px}
+  .dieBox{--half:26px;width:52px;height:52px}
+  .dieShadow{width:44px;top:58px}
+  .dieWrap.winner .dieShadow{width:52px}
+  .dieLabel{margin-top:16px}
+  .battle .verdict{font-size:19px;margin:8px 0 2px}
+  .battle .go{margin-top:10px}
+}
+.battle .kicker{font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--brass);margin:0}
+.battle .versus{display:flex;align-items:center;justify-content:center;gap:16px;margin:12px 0 4px;line-height:1}
+.battle .versus .glyph{width:46px;height:46px}
+.battle .versus .vs{font-family:"Zilla Slab",serif;font-size:14px;color:var(--muted);letter-spacing:.1em}
+.battle .roles{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:14px;padding:0 6px}
+/* ---- 3D dice ---- */
+.dice{display:flex;align-items:center;justify-content:center;gap:34px;margin:14px 0 6px}
+.dieBox{--half:32px;width:64px;height:64px;position:relative;transform-style:preserve-3d;
+  transition:transform .78s cubic-bezier(.22,.72,.24,1)}
+.dieShadow{position:absolute;left:50%;top:70px;width:56px;height:10px;border-radius:50%;
+  transform:translateX(-50%);background:rgba(0,0,0,.28);opacity:.85;
+  transition:background .25s, width .25s}
+/* The "landed" cue animates the shadow, never the cube: any filter on a
+   preserve-3d element flattens it and collapses the die to an edge. */
+.dieWrap.settle .dieShadow{animation:thud .32s ease-out both}
+@keyframes thud{
+  0%{transform:translateX(-50%) scaleX(1.45);opacity:.45}
+  100%{transform:translateX(-50%) scaleX(1);opacity:.85}
+}
+.face{
+  position:absolute;inset:0;border-radius:11px;
+  background:linear-gradient(150deg,#fbf7ea,#e6dcc2);
+  border:1px solid rgba(90,80,55,.30);
+  box-shadow:inset 0 0 14px rgba(120,100,60,.22);
+  display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);
+  /* proportional, not fixed px: the same face markup is used at 64px in the
+     battle overlay and 44px on the menu, and fixed pips overflowed the small one */
+  padding:13%;gap:3%;
+  /* Hidden, not visible: the cube is hollow, so the three faces pointing away
+     were showing through the front one as ghost outlines and stray pips. */
+  backface-visibility:hidden;
+  -webkit-backface-visibility:hidden;
+}
+.face i{width:66%;aspect-ratio:1;border-radius:50%;align-self:center;justify-self:center;
+  background:radial-gradient(circle at 34% 30%,#5d5340,#241f16);
+  box-shadow:inset 0 1px 1px rgba(255,255,255,.30)}
+/* face placement — offset by the cube's half-edge, so one variable resizes it */
+.f1{transform:translateZ(var(--half))}
+.f6{transform:rotateY(180deg) translateZ(var(--half))}
+.f2{transform:rotateY(90deg)  translateZ(var(--half))}
+.f5{transform:rotateY(-90deg) translateZ(var(--half))}
+.f3{transform:rotateX(90deg)  translateZ(var(--half))}
+.f4{transform:rotateX(-90deg) translateZ(var(--half))}
+.dieLabel{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--muted);text-align:center;margin-top:22px}
+.dieSide{display:flex;flex-direction:column;align-items:center}
+.dieRow{display:flex;gap:12px;align-items:flex-start}
+/* Three attacking dice (the Queen) have to sit beside the defender's die inside
+   a 360px panel. At the default 64px that row alone is 216px and the whole
+   group overflows, so a three-die row scales itself down. Keyed on the count
+   rather than a breakpoint — it is the die count that causes the overflow. */
+.dieRow[data-n="3"]{gap:8px}
+.dieRow[data-n="3"] .dieWrap,
+.dieRow[data-n="3"] .dieBox{width:46px;height:46px;--half:23px}
+.dieRow[data-n="3"] .dieShadow{top:50px;width:38px}
+.dieSide.winner .dieRow[data-n="3"] .dieWrap:not(.ignored) .dieShadow{width:48px;height:9px}
+/* The perspective must sit on the cube's DIRECT parent: anything in between
+   flattens the 3D context and collapses a die rotated 90deg (values 2 and 5). */
+.dieWrap{position:relative;width:64px;height:64px;
+  perspective:520px;transform-style:preserve-3d}
+/* An attacker rolling two or three keeps only its highest; the dice that do
+   not count fade back so the deciding one is unmistakable. */
+.dieWrap.ignored{opacity:.34}
+.dieWrap.counts .dieShadow{background:color-mix(in srgb,var(--brass) 70%,transparent)}
+/* Winner marked on the shadow and label — deliberately NOT with a filter on the
+   die, which would flatten its 3D transform and make the cube disappear. */
+.dieSide.winner .dieWrap:not(.ignored) .dieShadow{
+  background:color-mix(in srgb,var(--advance) 75%,transparent);width:66px;height:11px}
+.dieSide.winner .dieLabel{color:var(--advance);font-weight:600}
+.battle .tallies{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-soft);min-height:1.4em;margin-top:2px}
+.battle .verdict{font-family:"Zilla Slab",serif;font-weight:700;font-size:22px;margin:12px 0 2px;min-height:1.2em;text-wrap:balance}
+.battle .verdict.win{color:var(--advance)}
+.battle .verdict.lose{color:var(--repel)}
+.battle .verdict-sub{font-size:12.5px;color:var(--ink-soft);min-height:1.1em}
+.battle .go{margin-top:16px;width:100%}
+
+/* ---- game-over ---- */
+.gameover{position:fixed;inset:0;z-index:60;display:none;place-items:center;padding:20px;
+  background:color-mix(in srgb,var(--bg) 70%,transparent);backdrop-filter:blur(3px)}
+.gameover.show{display:grid}
+.gameover .panel{width:min(360px,92vw);background:var(--surface);border:1px solid var(--line);border-radius:16px;
+  box-shadow:var(--shadow);padding:26px;text-align:center}
+.gameover .panel .result{font-family:"Zilla Slab",serif;font-weight:700;font-size:27px;margin:0 0 6px;text-wrap:balance}
+.gameover .panel .why{color:var(--ink-soft);font-size:14px;margin:0 0 18px}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001ms !important;transition-duration:.001ms !important}
+}
+</style>
+</head>
+<body>
+<!-- opening animation: the board assembles, all 32 pieces drop in, dice tumble down and land -->
+<div class="splash" id="splash">
+  <div class="splashInner">
+    <div class="splashBoard" id="splashBoard" aria-hidden="true"></div>
+    <div class="splashRank" id="splashRank" aria-hidden="true"></div>
+    <div class="splashDice" id="splashDice" aria-hidden="true"></div>
+    <h1 class="splashMark">Gambit</h1>
+    <p class="splashSub">every capture is a roll of the dice</p>
+  </div>
+  <button class="splashSkip" id="splashSkip" type="button">Skip</button>
+</div>
+
+<!-- piece shapes: plain solid silhouettes, one closed outline each -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+<path id="pc-p" d="M22.5 5a6 6 0 0 1 3.6 10.8c2.4 1.6 4.2 4.6 4.7 8.4l.8 6h3.4l1.5 5h-28l1.5-5h3.4l.8-6c.5-3.8 2.3-6.8 4.7-8.4A6 6 0 0 1 22.5 5z"/>
+<path id="pc-r" d="M11 10h3.5v3h4v-3h8v3h4v-3H34v7l-2.5 2.5v11L34 33v3l2 4H9l2-4v-3l2.5-2.5v-11L11 17z"/>
+<path id="pc-n" d="M24 6l2.5 4.5c4 2 7 6.5 7 12.5v9l2 4.5h-26l2-4.5v-4c0-5 3-8 6.5-10l-3.5 1c-2 .5-3.5-1-3-3 .5-2.5 3-4.5 6-6 2-1 3.5-2.5 4-4z"/>
+<path id="pc-b" d="M22.5 5.5a2.6 2.6 0 0 1 1.9 4.4c3.4 2.7 6.1 7 6.1 11.4 0 3.4-2 5.9-4.2 7.3l.8 3.3h2.3l2.1 4.5h-18l2.1-4.5h2.3l.8-3.3c-2.2-1.4-4.2-3.9-4.2-7.3 0-4.4 2.7-8.7 6.1-11.4A2.6 2.6 0 0 1 22.5 5.5z"/>
+<path id="pc-q" d="M9.5 10L13 19l3.5-10.5L22.5 18l6-9.5L32 19l3.5-9L34 26l-1 4 2 1v3l2 4H8l2-4v-3l2-1-1-4z"/>
+<path id="pc-k" d="M20.5 3.5h4v3h3v3h-3v3c5 .5 9 4.5 9 9l-1 6.5 2.5 1.5v3l2 4H8l2-4v-3l2.5-1.5-1-6.5c0-4.5 4-8.5 9-9v-3h-3v-3h3z"/>
+</defs></svg>
+
+<div class="app">
+  <header class="masthead">
+    <button class="backBtn" id="backBtn" type="button" aria-label="Back to the menu" hidden>
+      <span aria-hidden="true">&#8592;</span>
+    </button>
+    <h1 class="wordmark">Gambit<span class="die">.</span></h1>
+    <p class="tagline" id="tagline">Standard chess &mdash; but every capture is a roll of the dice.</p>
+    <span class="mast-spacer"></span>
+    <button class="icon-btn gearBtn" id="gearBtn" type="button" aria-label="Settings">
+      <span aria-hidden="true">&#9881;</span>
+    </button>
+  </header>
+
+  <!-- everything that isn't the game itself lives behind the gear -->
+  <div class="sheet" id="settings" hidden>
+    <div class="sheetPanel">
+      <div class="sheetHead">
+        <h2>Settings</h2>
+        <button class="rbtn" id="settingsClose" type="button" aria-label="Close">&times;</button>
+      </div>
+      <div class="controls">
+        <div class="trainSettings" id="trainSettings" hidden>
+          <p class="setGroup">Training</p>
+          <div class="tTabs">
+            <button class="tTab" id="tabRules" type="button">Rules</button>
+            <button class="tTab on" id="tabPuzzles" type="button">Puzzles</button>
+          </div>
+          <div class="pzDiff" id="pzDiffRow" role="group" aria-label="Puzzle difficulty">
+            <button class="pzLvl on" data-lvl="easy"   type="button">Easy</button>
+            <button class="pzLvl"    data-lvl="medium" type="button">Medium</button>
+            <button class="pzLvl"    data-lvl="hard"   type="button">Hard</button>
+          </div>
+          <p class="pzNote" id="pzNote">The dice apply here too &mdash; find the right move,
+            then win the roll. A move that misses is marked in red and explained;
+            the board waits for you to press Retry.</p>
+        </div>
+        <p class="setGroup" id="setGroupGame">Game</p>
+        <label class="switch"><span>Dark theme</span>
+          <input type="checkbox" id="themeToggle"><span class="track"></span></label>
+        <div class="opponentBox" id="opponentBox">
+          <label class="switch"><span>Play against the computer</span>
+            <input type="checkbox" id="botToggle"><span class="track"></span></label>
+          <div class="fields" id="botOpts" hidden>
+            <label class="field"><span>Strength</span>
+              <select id="botLevel">
+                <option value="easy">Easy</option>
+                <option value="medium" selected>Medium</option>
+                <option value="hard">Hard</option>
+                <option value="master">Master</option>
+              </select>
+            </label>
+            <label class="field"><span>Computer plays</span>
+              <select id="botSide">
+                <option value="b" selected>Black</option>
+                <option value="w">White</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <label class="switch" id="rotateRow"><span>Rotate board each turn</span>
+          <input type="checkbox" id="rotateToggle"><span class="track"></span></label>
+      </div>
+      <details class="rules sheetRules">
+        <summary>How Gambit differs from chess</summary>
+        <div class="body" id="rulesBody"></div>
+      </details>
+    </div>
+  </div>
+
+  <!-- start screen: pick an opponent before the board appears -->
+  <section class="menu" id="menu">
+    <!-- The pitch, shown rather than told: a knight attacks a pawn and the dice
+         keep deciding it, over and over, right on the start screen. -->
+    <div class="hero">
+      <div class="heroStage">
+        <div class="heroBoard" id="heroBoard" aria-hidden="true"></div>
+        <div class="heroRoll">
+          <div class="heroSide" id="heroAtkDice"></div>
+          <span class="heroVs">vs</span>
+          <div class="heroSide" id="heroDefDice"></div>
+        </div>
+      </div>
+      <p class="heroVerdict" id="heroVerdict">&nbsp;</p>
+      <p class="heroCaption">Chess, piece for piece. But you never simply take a piece &mdash;
+        you attack it, and the dice decide. Roll lower and it is <em>your</em> piece that falls.</p>
+    </div>
+
+    <p class="menuGroup">Play the computer</p>
+    <div class="modeGrid">
+      <button class="mode" type="button" data-mode="bot" data-level="easy">
+        <span class="mIcon" data-sq="dark" data-piece="p"></span>
+        <span class="mName">Low</span>
+        <span class="mDesc">Loose and impulsive. A gentle start.</span>
+      </button>
+      <button class="mode" type="button" data-mode="bot" data-level="medium">
+        <span class="mIcon" data-sq="light" data-piece="n"></span>
+        <span class="mName">Medium</span>
+        <span class="mDesc">Looks a move ahead. Takes fair trades.</span>
+      </button>
+      <button class="mode" type="button" data-mode="bot" data-level="hard">
+        <span class="mIcon" data-sq="dark" data-piece="r"></span>
+        <span class="mName">Hard</span>
+        <span class="mDesc">Three moves deep. Rarely gambles badly.</span>
+      </button>
+      <button class="mode" type="button" data-mode="bot" data-level="master">
+        <span class="mIcon" data-sq="light" data-piece="q"></span>
+        <span class="mName">Master</span>
+        <span class="mDesc">Deepest search. Punishes loose attacks.</span>
+      </button>
+    </div>
+
+    <button class="mode wide" type="button" data-mode="hotseat">
+      <span class="mIcon pair" data-sq="dark" data-piece="k" data-piece2="k"></span>
+      <span class="mBody">
+        <span class="mName">Two players</span>
+        <span class="mDesc">Share one device and pass it back and forth.</span>
+      </span>
+    </button>
+
+    <button class="mode wide train" type="button" data-mode="training">
+      <span class="mIcon" id="trainDie"></span>
+      <span class="mBody">
+        <span class="mName">Training</span>
+        <span class="mDesc">Five short lessons on how Gambit differs from chess.</span>
+      </span>
+    </button>
+  </section>
+
+  <main class="game" id="gameView" hidden>
+    <section class="board-wrap" aria-label="Chess board">
+      <!-- Training prompt sits ABOVE the board. It used to live under it, which
+           put it 500px off-screen on a phone — nobody ever found the tabs. -->
+      <!-- Just the prompt. Mode and difficulty live behind the gear. -->
+      <div class="trainBar" id="trainBar" hidden>
+        <div class="coach">
+          <span class="coachChip" id="coachChip"></span>
+          <div class="coachBody">
+            <p class="coachTitle" id="coachTitle">White to move</p>
+            <p class="coachText" id="coachText"></p>
+            <p class="coachMeta" id="coachMeta"></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- opponent above the board, you below: the standard chess-app sandwich -->
+      <div class="playerCard" id="cardTop">
+        <span class="pcAvatar" id="avTop"></span>
+        <span class="pcName" id="nameTop">Black</span>
+        <span class="pcTaken" id="takenTop"></span>
+        <span class="pcAdv" id="advTop"></span>
+      </div>
+
+      <div class="board" id="board" role="grid" aria-label="Gambit board"></div>
+
+      <div class="playerCard" id="cardBottom">
+        <span class="pcAvatar" id="avBottom"></span>
+        <span class="pcName" id="nameBottom">White</span>
+        <span class="pcTaken" id="takenBottom"></span>
+        <span class="pcAdv" id="advBottom"></span>
+      </div>
+
+      <!-- Training controls sit BELOW the board, within thumb reach. -->
+      <div class="trainActions" id="trainActions" hidden>
+        <div class="tActions" id="rulesActions">
+          <button class="btn rvGhost" id="tPrev" type="button">Back</button>
+          <button class="btn primary" id="tNext" type="button">Next</button>
+        </div>
+        <div class="tActions" id="puzzleActionsRow" hidden>
+          <button class="btn rvGhost" id="pzHint" type="button">Hint</button>
+          <button class="btn rvGhost" id="pzRetry" type="button">Retry</button>
+          <button class="btn primary" id="pzNext" type="button">Next</button>
+        </div>
+      </div>
+
+      <div class="boardTools">
+        <button class="tool" id="menuBtn" type="button" title="Back to the menu">
+          <span class="tIcon">&#9776;</span><span class="tTxt">Menu</span>
+        </button>
+        <button class="tool" id="flipBtn" type="button" title="Flip board">
+          <span class="tIcon">&#8645;</span><span class="tTxt">Flip</span>
+        </button>
+        <button class="tool" id="reviewBtn" type="button" title="Review the game" disabled>
+          <span class="tIcon">&#9635;</span><span class="tTxt">Review</span>
+        </button>
+        <button class="tool primaryTool" id="newGameBtn" type="button" title="Start a new game">
+          <span class="tIcon">&#43;</span><span class="tTxt">New game</span>
+        </button>
+      </div>
+
+      <div class="reviewBar" id="reviewBar" hidden>
+        <div class="rvNav">
+          <button class="rbtn" id="rvFirst" type="button" aria-label="Jump to start">&#124;&#9664;</button>
+          <button class="rbtn" id="rvPrev"  type="button" aria-label="Previous move">&#9664;</button>
+          <span class="rvCount" id="rvCount">0 / 0</span>
+          <button class="rbtn" id="rvNext"  type="button" aria-label="Next move">&#9654;</button>
+          <button class="rbtn" id="rvLast"  type="button" aria-label="Jump to end">&#9654;&#124;</button>
+        </div>
+        <p class="rvDesc" id="rvDesc">Starting position</p>
+        <div class="rvActions">
+          <button class="btn rvGhost" id="rvExit" type="button">Close review</button>
+          <button class="btn primary" id="rvNew" type="button">New game</button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="rail" id="rail">
+      <div class="card">
+        <h2>Status</h2>
+        <p class="status-line" id="statusLine">White to move</p>
+        <p class="status-sub" id="statusSub">Tap a piece to begin.</p>
+        <div class="turn-chip"><span class="dot" id="turnDot"></span><span id="turnText">White&rsquo;s turn</span></div>
+      </div>
+
+      <div class="card">
+        <h2>Moves</h2>
+        <div class="log" id="log"><span class="empty">The game hasn&rsquo;t started.</span></div>
+      </div>
+    </aside>
+
+    <template id="rulesText">
+      <ul>
+        <li>Movement, check, castling, en&nbsp;passant, promotion &mdash; all standard.</li>
+        <li>A capture is a <strong>battle</strong>: both sides roll, each keeps its
+          <strong>highest single die</strong>, higher wins, ties re-roll.</li>
+        <li><strong>Attacking dice go by piece</strong> &mdash; Queen&nbsp;3, Rook / Bishop / Knight&nbsp;2,
+          Pawn&nbsp;1. That is <strong>79%</strong>, <strong>69%</strong> and <strong>50%</strong> to the attacker.</li>
+        <li>The <strong>defender always rolls one die</strong>, whatever it is. Extra dice make a
+          piece better at attacking, never harder to kill.</li>
+        <li>Attacker wins &rarr; normal capture. Attacker loses &rarr; <strong>the attacking piece is removed</strong>; the defender holds its square.</li>
+        <li>The King never rolls. A King capturing a piece succeeds automatically.</li>
+        <li>While your King is in check you keep moving &mdash; risking further pieces if you choose &mdash; until it is safe, or it is checkmate.</li>
+      </ul>
+    </template>
+  </main>
+</div>
+
+<!-- battle overlay -->
+<div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-label="Capture battle">
+  <div class="battle">
+    <p class="kicker" id="battleKicker">Battle for e5</p>
+    <div class="versus">
+      <span id="atkGlyph"></span>
+      <span class="vs">VS</span>
+      <span id="defGlyph"></span>
+    </div>
+    <div class="roles"><span>Attacker</span><span>Defender</span></div>
+    <p class="tallies" id="rollLog"></p>
+    <div class="dice">
+      <div class="dieSide" id="wrapA">
+        <div class="dieRow" id="rowA"></div>
+        <div class="dieLabel" id="labelA">Attacker</div>
+      </div>
+      <div class="dieSide" id="wrapD">
+        <div class="dieRow" id="rowD"></div>
+        <div class="dieLabel" id="labelD">Defender</div>
+      </div>
+    </div>
+    <p class="tallies" id="tallies"></p>
+    <p class="verdict" id="verdict"></p>
+    <p class="verdict-sub" id="verdictSub"></p>
+    <button class="btn primary go" id="battleGo" type="button" style="display:none">Continue</button>
+  </div>
+</div>
+
+<!-- game over -->
+<div class="gameover" id="gameover" role="dialog" aria-modal="true" aria-label="Game over">
+  <div class="panel">
+    <p class="result" id="goResult">Checkmate</p>
+    <p class="why" id="goWhy">White wins.</p>
+    <div class="rvActions">
+      <button class="btn rvGhost" id="goReview" type="button">Review game</button>
+      <button class="btn primary" id="goNew" type="button">New game</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+(function(){
+/* ================= constants ================= */
+var FILES = "abcdefgh";
+/* Both sides share one set of SVG silhouettes; only fill + rim differ. */
+function pieceSVG(color, type, extra){
+  return '<svg class="glyph'+(color==="b"?" b":"")+(extra?" "+extra:"")+
+         '" viewBox="0 0 45 45" aria-hidden="true" focusable="false"><use href="#pc-'+type+'"/></svg>';
+}
+var VAL = {p:1,n:3,b:3,r:5,q:9,k:0};
+var NAME = {p:"Pawn",n:"Knight",b:"Bishop",r:"Rook",q:"Queen",k:"King"};
+
+var START = [
+ "br","bn","bb","bq","bk","bb","bn","br",
+ "bp","bp","bp","bp","bp","bp","bp","bp",
+ "","","","","","","","",
+ "","","","","","","","",
+ "","","","","","","","",
+ "","","","","","","","",
+ "wp","wp","wp","wp","wp","wp","wp","wp",
+ "wr","wn","wb","wq","wk","wb","wn","wr"
+];
+
+var ROOK_DIRS=[[-1,0],[1,0],[0,-1],[0,1]];
+var BISHOP_DIRS=[[-1,-1],[-1,1],[1,-1],[1,1]];
+var KNIGHT_J=[[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+var KING_J=ROOK_DIRS.concat(BISHOP_DIRS);
+
+/* ================= helpers ================= */
+function idx(r,c){return r*8+c;}
+function rowOf(i){return i>>3;}
+function colOf(i){return i&7;}
+function onBoard(r,c){return r>=0&&r<8&&c>=0&&c<8;}
+function opp(c){return c==="w"?"b":"w";}
+function sqName(i){return FILES[colOf(i)]+(8-rowOf(i));}
+function d6(){return 1+Math.floor(Math.random()*6);}
+
+/* ================= game state ================= */
+var state, selected, legalCache, gameOver, busy, rotate, lastMove;
+var lastBattle=null;      // dice of the most recent battle, for the review
+var reviewIdx=null;       // null = playing live; otherwise the ply being viewed
+function reviewing(){ return reviewIdx!==null; }
+
+function freshState(){
+  return {
+    board: START.slice(),
+    turn: "w",
+    castling: {wK:true,wQ:true,bK:true,bQ:true},
+    ep: null,
+    halfmove: 0,
+    posCounts: {},
+    graves: {w:[], b:[]},   // piece types this colour has lost (any cause)
+    history: [],
+    /* One board snapshot per ply, snaps[0] being the starting position, so the
+       finished game can be stepped through without replaying any moves. */
+    snaps: [{board: START.slice(), turn:"w", graves:{w:[], b:[]}}],
+    continuation: false
+  };
+}
+
+/* ================= move generation ================= */
+function pseudoMoves(st, color){
+  var b=st.board, moves=[], i, r, c;
+  for(i=0;i<64;i++){
+    var pc=b[i]; if(!pc||pc[0]!==color) continue;
+    r=rowOf(i); c=colOf(i); var t=pc[1];
+    if(t==="p") pawnMoves(st,color,r,c,i,moves);
+    else if(t==="n") jumpMoves(b,color,r,c,i,KNIGHT_J,moves,"n");
+    else if(t==="k"){ jumpMoves(b,color,r,c,i,KING_J,moves,"k"); castleMoves(st,color,i,moves); }
+    else slideMoves(b,color,r,c,i,t==="r"?ROOK_DIRS:t==="b"?BISHOP_DIRS:KING_J,moves,t);
+  }
+  return moves;
+}
+function pawnMoves(st,color,r,c,i,moves){
+  var b=st.board, dir=color==="w"?-1:1, startRow=color==="w"?6:1, promoRow=color==="w"?0:7;
+  var f1=r+dir;
+  if(onBoard(f1,c)&&b[idx(f1,c)]===""){
+    addPawn(moves,i,idx(f1,c),f1===promoRow,false,false);
+    var f2=r+2*dir;
+    if(r===startRow&&b[idx(f2,c)]===""){
+      moves.push({from:i,to:idx(f2,c),piece:"p",capture:false,dbl:true});
+    }
+  }
+  [c-1,c+1].forEach(function(cc){
+    if(!onBoard(f1,cc)) return;
+    var tgt=idx(f1,cc), occ=b[tgt];
+    if(occ&&occ[0]===opp(color)){
+      addPawn(moves,i,tgt,f1===promoRow,false,true);
+    } else if(st.ep!==null&&tgt===st.ep){
+      moves.push({from:i,to:tgt,piece:"p",capture:true,ep:true});
+    }
+  });
+}
+function addPawn(moves,from,to,promo,ep,capture){
+  if(promo){
+    ["q","r","b","n"].forEach(function(pp){
+      moves.push({from:from,to:to,piece:"p",capture:capture,promo:pp});
+    });
+  } else {
+    moves.push({from:from,to:to,piece:"p",capture:capture});
+  }
+}
+function jumpMoves(b,color,r,c,i,offs,moves,t){
+  for(var k=0;k<offs.length;k++){
+    var rr=r+offs[k][0], cc=c+offs[k][1];
+    if(!onBoard(rr,cc)) continue;
+    var occ=b[idx(rr,cc)];
+    if(occ===""){ moves.push({from:i,to:idx(rr,cc),piece:t,capture:false}); }
+    else if(occ[0]!==color){ moves.push({from:i,to:idx(rr,cc),piece:t,capture:true}); }
+  }
+}
+function slideMoves(b,color,r,c,i,dirs,moves,t){
+  for(var k=0;k<dirs.length;k++){
+    var rr=r+dirs[k][0], cc=c+dirs[k][1];
+    while(onBoard(rr,cc)){
+      var occ=b[idx(rr,cc)];
+      if(occ===""){ moves.push({from:i,to:idx(rr,cc),piece:t,capture:false}); }
+      else { if(occ[0]!==color) moves.push({from:i,to:idx(rr,cc),piece:t,capture:true}); break; }
+      rr+=dirs[k][0]; cc+=dirs[k][1];
+    }
+  }
+}
+function castleMoves(st,color,i,moves){
+  var home=color==="w"?idx(7,4):idx(0,4);
+  if(i!==home) return;
+  var b=st.board, row=color==="w"?7:0, rights=st.castling;
+  if(rights[color+"K"] && b[idx(row,5)]===""&&b[idx(row,6)]===""&&b[idx(row,7)]===color+"r"){
+    moves.push({from:i,to:idx(row,6),piece:"k",capture:false,castle:"K"});
+  }
+  if(rights[color+"Q"] && b[idx(row,1)]===""&&b[idx(row,2)]===""&&b[idx(row,3)]===""&&b[idx(row,0)]===color+"r"){
+    moves.push({from:i,to:idx(row,2),piece:"k",capture:false,castle:"Q"});
+  }
+}
+
+/* ================= attack detection ================= */
+function isAttacked(b, r, c, by){
+  // pawns
+  var pd = by==="w" ? 1 : -1; // attacker pawn sits one row toward its own side
+  if(onBoard(r+pd,c-1) && b[idx(r+pd,c-1)]===by+"p") return true;
+  if(onBoard(r+pd,c+1) && b[idx(r+pd,c+1)]===by+"p") return true;
+  // knights
+  for(var k=0;k<KNIGHT_J.length;k++){
+    var rr=r+KNIGHT_J[k][0], cc=c+KNIGHT_J[k][1];
+    if(onBoard(rr,cc)&&b[idx(rr,cc)]===by+"n") return true;
+  }
+  // king
+  for(k=0;k<KING_J.length;k++){
+    rr=r+KING_J[k][0]; cc=c+KING_J[k][1];
+    if(onBoard(rr,cc)&&b[idx(rr,cc)]===by+"k") return true;
+  }
+  // bishop / queen diagonals
+  if(rayHit(b,r,c,BISHOP_DIRS,by,"b")) return true;
+  // rook / queen orthogonals
+  if(rayHit(b,r,c,ROOK_DIRS,by,"r")) return true;
+  return false;
+}
+function rayHit(b,r,c,dirs,by,slider){
+  for(var k=0;k<dirs.length;k++){
+    var rr=r+dirs[k][0], cc=c+dirs[k][1];
+    while(onBoard(rr,cc)){
+      var occ=b[idx(rr,cc)];
+      if(occ!==""){
+        if(occ[0]===by && (occ[1]===slider || occ[1]==="q")) return true;
+        break;
+      }
+      rr+=dirs[k][0]; cc+=dirs[k][1];
+    }
+  }
+  return false;
+}
+function kingSq(b,color){
+  for(var i=0;i<64;i++) if(b[i]===color+"k") return i;
+  return -1;
+}
+function inCheck(b,color){
+  var ks=kingSq(b,color);
+  if(ks<0) return false;
+  return isAttacked(b,rowOf(ks),colOf(ks),opp(color));
+}
+
+/* ================= apply a move (pure-ish) ================= */
+/* returns {board,castling,ep,halfmove,captured} ; captureSucceeds only matters for capture moves */
+function applyMove(st, mv, captureSucceeds){
+  var b=st.board.slice();
+  var cast={wK:st.castling.wK,wQ:st.castling.wQ,bK:st.castling.bK,bQ:st.castling.bQ};
+  var ep=null, hm=st.halfmove+1, captured=null;
+  var pc=b[mv.from], color=pc[0], type=pc[1];
+
+  function dropRight(sq){
+    if(sq===idx(7,0)) cast.wQ=false;
+    else if(sq===idx(7,7)) cast.wK=false;
+    else if(sq===idx(0,0)) cast.bQ=false;
+    else if(sq===idx(0,7)) cast.bK=false;
+  }
+
+  if(mv.castle){
+    var row=color==="w"?7:0;
+    b[mv.from]=""; b[mv.to]=color+"k";
+    if(mv.castle==="K"){ b[idx(row,7)]=""; b[idx(row,5)]=color+"r"; }
+    else { b[idx(row,0)]=""; b[idx(row,3)]=color+"r"; }
+    cast[color+"K"]=false; cast[color+"Q"]=false;
+  }
+  else if(mv.capture && !captureSucceeds && type!=="k"){
+    // FAILED capture: attacker vanishes, defender stays
+    b[mv.from]="";
+    captured={color:color,type:type,cause:"repelled"};
+    dropRight(mv.from);
+    // halfmove NOT reset
+  }
+  else {
+    // normal move OR successful capture OR king capture
+    var victim=b[mv.to];
+    if(mv.ep){
+      var capSq=idx(rowOf(mv.from), colOf(mv.to));
+      victim=b[capSq]; b[capSq]="";
+    }
+    if(victim){ captured={color:victim[0],type:victim[1],cause:"captured"}; }
+    b[mv.to]=pc; b[mv.from]="";
+    if(mv.promo) b[mv.to]=color+mv.promo;
+    if(mv.dbl) ep=idx((rowOf(mv.from)+rowOf(mv.to))/2, colOf(mv.to));
+    if(type==="k"){ cast[color+"K"]=false; cast[color+"Q"]=false; }
+    dropRight(mv.from); dropRight(mv.to);
+    if(type==="p" || (mv.capture && captureSucceeds)) hm=0;
+  }
+  return {board:b,castling:cast,ep:ep,halfmove:hm,captured:captured};
+}
+
+/* ================= legal moves ================= */
+function legalMoves(st, color){
+  var ps=pseudoMoves(st,color), out=[], i;
+  for(i=0;i<ps.length;i++){
+    var mv=ps[i];
+    if(mv.castle){
+      var row=color==="w"?7:0, by=opp(color);
+      if(isAttacked(st.board,row,4,by)) continue;
+      if(mv.castle==="K" && (isAttacked(st.board,row,5,by)||isAttacked(st.board,row,6,by))) continue;
+      if(mv.castle==="Q" && (isAttacked(st.board,row,3,by)||isAttacked(st.board,row,2,by))) continue;
+    }
+    var res=applyMove(st,mv,true); // legality assumes the capture succeeds
+    if(!inCheck(res.board,color)) out.push(mv);
+  }
+  return out;
+}
+
+/* ================= notation ================= */
+function longNotation(mv, result){
+  if(mv.castle) return mv.castle==="K"?"O-O":"O-O-O";
+  var pl = mv.piece==="p" ? "" : mv.piece.toUpperCase();
+  var sep = mv.capture ? "x" : "-";
+  var s = pl + sqName(mv.from) + sep + sqName(mv.to);
+  if(mv.promo) s += "="+mv.promo.toUpperCase();
+  if(mv.capture) s += result ? " ✓" : " ✗";
+  return s;
+}
+
+/* ================= position key (threefold) ================= */
+/* Join with a separator, NOT "". Empty squares are "", so joining with nothing
+   drops every gap and the key ends up encoding only the sequence of pieces, not
+   the squares they stand on — after 1.e4 the key was byte-identical to the
+   starting position, so ordinary opening moves triggered a bogus threefold. */
+function posKey(st){
+  return st.board.join(",")+"|"+st.turn+"|"+st.castling.wK+st.castling.wQ+st.castling.bK+st.castling.bQ+"|"+st.ep;
+}
+
+/* ================= insufficient material ================= */
+function insufficient(b){
+  var w=[], bl=[];
+  for(var i=0;i<64;i++){
+    var pc=b[i]; if(!pc||pc[1]==="k") continue;
+    (pc[0]==="w"?w:bl).push({t:pc[1],sqc:(rowOf(i)+colOf(i))&1});
+  }
+  function loneMinor(arr){ return arr.length===0 || (arr.length===1 && (arr[0].t==="n"||arr[0].t==="b")); }
+  if(!loneMinor(w) || !loneMinor(bl)) return false;
+  // K vs K, K+minor vs K, K+B vs K+B same colour  -> draw
+  if(w.length===1 && bl.length===1 && w[0].t==="b" && bl[0].t==="b" && w[0].sqc!==bl[0].sqc) return false;
+  return true;
+}
+
+/* ================= sound =================
+   Synthesised with the Web Audio API rather than shipped as audio files, so the
+   game stays one self-contained document. Browsers block audio until the user
+   interacts, so the context is created lazily and resumed on first input. */
+var actx=null, master=null, audioReady=false;
+
+function audio(){
+  if(actx===null){
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if(!AC){ actx=false; return null; }
+    /* Claim the session BEFORE the context exists: on iOS the category is
+       decided when the context is first created, so setting it afterwards is
+       too late to stop the interruption. */
+    claimAudioSession();
+    actx = new AC();
+    master = actx.createGain();
+    master.gain.value = 0.85;
+    master.connect(actx.destination);
+  }
+  if(!actx) return null;
+  if(actx.state==="suspended") actx.resume();
+  return actx;
+}
+
+/* Browsers start the audio context suspended and only let a user gesture wake
+   it. resume() is asynchronous, so anything scheduled before it lands is timed
+   against a clock that is not running yet and is silently dropped. Unlock from
+   the first real gesture, play a one-sample buffer (which is what iOS actually
+   requires), and only mark audio usable once the context reports "running". */
+/* Audio session: "ambient", so the game MIXES with whatever the player already
+   has playing. This is the whole point — a chess app has no business stopping
+   someone's music.
+     - "playback" (used here previously) declares the page to be primary media
+       playback, so iOS interrupts Spotify/Apple Music the moment sound starts.
+     - A silently looping <audio> keepalive did the same thing on older iOS: a
+       media element that is *playing* holds the session even if it is silent.
+   Both are gone. The one consequence of "ambient" is that iOS honours the
+   physical ring/silent switch for it, exactly as it does for every other game
+   that mixes — with the switch on silent, the game is quiet. That is the price
+   of not interrupting, and it is the tradeoff the player controls. */
+function claimAudioSession(){
+  try{
+    if(navigator.audioSession && navigator.audioSession.type!=="ambient")
+      navigator.audioSession.type="ambient";
+  }catch(e){}
+}
+/* Set it as early as possible — before any AudioContext can be constructed. */
+claimAudioSession();
+
+function unlockAudio(){
+  claimAudioSession();
+  var c=audio(); if(!c) return;
+  try{
+    var b=c.createBuffer(1,1,22050);
+    var s=c.createBufferSource();
+    s.buffer=b; s.connect(master); s.start(0);
+  }catch(e){}
+  var settle=function(){ if(c.state==="running") audioReady=true; };
+  if(c.state==="running") audioReady=true;
+  else if(c.resume) c.resume().then(settle, function(){});
+  setTimeout(settle, 120);
+}
+["pointerdown","touchstart","mousedown","keydown"].forEach(function(evt){
+  document.addEventListener(evt, unlockAudio, {capture:true, passive:true});
+});
+/* Returning from the background leaves the context suspended, which would make
+   the game fall silent for the rest of the session. */
+document.addEventListener("visibilitychange", function(){
+  if(document.visibilityState==="visible" && actx && actx.state==="suspended"){
+    claimAudioSession();
+    actx.resume().catch(function(){});
+  }
+});
+
+function tone(opts){
+  var c=audio(); if(!c||!audioReady) return;
+  var t0=c.currentTime + (opts.delay||0);
+  var o=c.createOscillator(), g=c.createGain();
+  o.type=opts.type||"sine";
+  o.frequency.setValueAtTime(opts.f0, t0);
+  if(opts.f1) o.frequency.exponentialRampToValueAtTime(Math.max(1,opts.f1), t0+opts.dur);
+  var peak=(opts.gain||0.15);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(peak, t0+0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0+opts.dur);
+  o.connect(g); g.connect(master);
+  o.start(t0); o.stop(t0+opts.dur+0.02);
+}
+function noise(dur, gain, delay, hp){
+  var c=audio(); if(!c||!audioReady) return;
+  var t0=c.currentTime+(delay||0), n=Math.floor(c.sampleRate*dur);
+  var buf=c.createBuffer(1,n,c.sampleRate), d=buf.getChannelData(0);
+  for(var i=0;i<n;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/n,2);
+  var src=c.createBufferSource(); src.buffer=buf;
+  var f=c.createBiquadFilter(); f.type="highpass"; f.frequency.value=hp||900;
+  var g=c.createGain(); g.gain.value=gain||0.12;
+  src.connect(f); f.connect(g); g.connect(master);
+  src.start(t0);
+}
+/* a piece set down on a board */
+function sndMove(){ noise(0.055,0.30,0,1600); tone({f0:210,f1:120,dur:0.10,type:"triangle",gain:0.34}); }
+/* the capture lands */
+function sndCapture(){
+  noise(0.09,0.42,0,900);
+  tone({f0:330,f1:520,dur:0.14,type:"triangle",gain:0.38});
+  tone({f0:520,f1:660,dur:0.18,type:"sine",gain:0.28,delay:0.09});
+}
+/* the attack is repelled — the attacker dies */
+function sndRepel(){
+  noise(0.12,0.38,0,500);
+  tone({f0:300,f1:90,dur:0.32,type:"sawtooth",gain:0.32});
+}
+/* dice hitting the table */
+function sndDie(delay){
+  noise(0.045,0.26,delay||0,2200);
+  tone({f0:420+Math.random()*160,f1:200,dur:0.06,type:"square",gain:0.16,delay:delay||0});
+}
+function sndCheck(){ tone({f0:740,dur:0.12,type:"square",gain:0.30}); tone({f0:880,dur:0.15,type:"square",gain:0.30,delay:0.13}); }
+function sndEnd(win){
+  var seq = win ? [523,659,784,1047] : [523,440,349,262];
+  seq.forEach(function(f,i){ tone({f0:f,dur:0.28,type:"triangle",gain:0.32,delay:i*0.13}); });
+}
+
+/* ================= how many dice each side rolls =================
+   Attacking dice are ranked by piece: Queen 3, Rook/Bishop/Knight 2, Pawn 1.
+   The DEFENDER always rolls exactly one, whatever it is. Each side keeps its
+   single highest die, higher wins, ties re-roll.
+
+   Resulting attacker win rates (exact, ties re-rolled away):
+     Pawn attacking .................. 50.0 %
+     Knight / Bishop / Rook attacking  69.4 %
+     Queen attacking ................. 79.2 %
+   Taking the HIGHER and not the sum is what keeps these edges rather than
+   certainties — summing 3d6 against 1d6 would win about 98%. */
+var ATK_DICE={q:3, r:2, b:2, n:2};   // attacker dice by piece type, default 1
+var DEF_DICE={};                     // defender always rolls one
+function atkDice(t){ return ATK_DICE[t]||1; }
+function defDice(t){ return DEF_DICE[t]||1; }
+
+/* Exact probability the attacker wins once ties are re-rolled away, for any
+   dice counts. The bot's expectiminimax needs this — with only pawns left at
+   50/50, a hardcoded 0.5 would misjudge nearly every capture on the board. */
+var _winCache={};
+function winChance(nA, nD){
+  var key=nA+"x"+nD;
+  if(_winCache[key]!=null) return _winCache[key];
+  // P(max of n d6 == k) = (k^n - (k-1)^n) / 6^n
+  function dist(n){
+    var p=[]; for(var k=1;k<=6;k++) p[k]=(Math.pow(k,n)-Math.pow(k-1,n))/Math.pow(6,n);
+    return p;
+  }
+  var A=dist(nA), D=dist(nD), win=0, tie=0;
+  for(var a=1;a<=6;a++) for(var d=1;d<=6;d++){
+    if(a>d) win+=A[a]*D[d]; else if(a===d) tie+=A[a]*D[d];
+  }
+  return (_winCache[key] = win/(1-tie));
+}
+function captureOdds(atkType, defType){
+  return winChance(atkDice(atkType), defDice(defType));
+}
+
+/* ================= 3D dice ================= */
+/* Which pips are lit, on a 3x3 grid indexed 1..9 */
+var PIPS={1:[5],2:[1,9],3:[1,5,9],4:[1,3,7,9],5:[1,3,5,7,9],6:[1,3,4,6,7,9]};
+/* Rotation that brings each face to the front, given the .fN placements */
+var FACE_ROT={1:[0,0],2:[0,-90],3:[-90,0],4:[90,0],5:[0,90],6:[0,180]};
+
+function buildDie(box){
+  box.innerHTML="";
+  for(var n=1;n<=6;n++){
+    var f=document.createElement("div");
+    f.className="face f"+n;
+    var lit=PIPS[n];
+    for(var cell=1;cell<=9;cell++){
+      var s=document.createElement("span");
+      if(lit.indexOf(cell)>=0){ var pip=document.createElement("i"); s.appendChild(pip); }
+      s.style.display="flex"; s.style.alignItems="center"; s.style.justifyContent="center";
+      f.appendChild(s);
+    }
+    box.appendChild(f);
+  }
+}
+/* Land the cube on `value`, spinning a few extra turns on the way. */
+function rollDie(box, value, spins){
+  var r=FACE_ROT[value];
+  var rx = r[0] + 360*(spins||2);
+  var ry = r[1] + 360*(spins||2);
+  box.style.transform = "rotateX("+rx+"deg) rotateY("+ry+"deg)";
+}
+
+/* ================= dice battle (async) ================= */
+var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function battle(atkType, atkColor, defType, defColor, atSq){
+  return new Promise(function(resolve){
+    var ov=document.getElementById("overlay");
+    document.getElementById("battleKicker").textContent =
+      "Battle for "+atSq+" · "+Math.round(captureOdds(atkType,defType)*100)+"% to the attacker";
+    document.getElementById("atkGlyph").innerHTML=pieceSVG(atkColor, atkType);
+    document.getElementById("defGlyph").innerHTML=pieceSVG(defColor, defType);
+    document.getElementById("tallies").textContent="";
+    document.getElementById("verdict").textContent="";
+    document.getElementById("verdict").className="verdict";
+    document.getElementById("verdictSub").textContent="";
+    document.getElementById("battleGo").style.display="none";
+    ov.classList.add("show");
+
+    var wrapA=document.getElementById("wrapA"), wrapD=document.getElementById("wrapD");
+    var rowA=document.getElementById("rowA"), rowD=document.getElementById("rowD");
+    var rollLog=document.getElementById("rollLog");
+    var nA=atkDice(atkType), nD=defDice(defType);
+
+    /* Build one cube per die this side rolls. Each lives in its own .dieWrap,
+       which is what carries the perspective. */
+    function buildSide(row, n){
+      row.innerHTML="";
+      row.dataset.n=n;          // drives the size of a three-die row (see CSS)
+      var boxes=[];
+      for(var i=0;i<n;i++){
+        var w=document.createElement("div"); w.className="dieWrap";
+        var b=document.createElement("div"); b.className="dieBox";
+        var sh=document.createElement("div"); sh.className="dieShadow";
+        buildDie(b);
+        b.style.transform="rotateX(-24deg) rotateY(18deg)";
+        w.appendChild(b); w.appendChild(sh); row.appendChild(w);
+        boxes.push(b);
+      }
+      return boxes;
+    }
+    var boxesA=buildSide(rowA,nA), boxesD=buildSide(rowD,nD);
+    document.getElementById("labelA").textContent = nA>1 ? ("Attacker · best of "+nA) : "Attacker";
+    document.getElementById("labelD").textContent = nD>1 ? ("Defender · best of "+nD) : "Defender";
+    rollLog.textContent="";
+    wrapA.classList.remove("winner"); wrapD.classList.remove("winner");
+
+    var rounds=[], turnCount=0;
+    throwDice();
+
+    function rollSide(boxes, values, spinBase){
+      boxes.forEach(function(b,i){
+        b.parentNode.classList.remove("ignored","counts");
+        if(reduced){ b.style.transition="none"; rollDie(b, values[i], 0); }
+        else { b.style.transition=""; rollDie(b, values[i], spinBase+i+turnCount); }
+      });
+    }
+    function markKept(boxes, values){
+      var best=Math.max.apply(null, values);
+      var taken=false;
+      boxes.forEach(function(b,i){
+        // exactly one die counts, even when both show the same face
+        var isKept = !taken && values[i]===best;
+        if(isKept) taken=true;
+        b.parentNode.classList.add(boxes.length>1 ? (isKept?"counts":"ignored") : "counts");
+      });
+    }
+
+    function throwDice(){
+      var va=[], vd=[], i;
+      for(i=0;i<nA;i++) va.push(d6());
+      for(i=0;i<nD;i++) vd.push(d6());
+      var a=Math.max.apply(null,va), bd=Math.max.apply(null,vd);
+      rounds.push((nA>1?("["+va.join(" ")+"]→"+a):a)+"–"+(nD>1?("["+vd.join(" ")+"]→"+bd):bd));
+      turnCount++;
+      wrapA.classList.remove("settle"); wrapD.classList.remove("settle");
+      if(boxesA[0]) void boxesA[0].offsetWidth;
+
+      rollSide(boxesA, va, 2);
+      rollSide(boxesD, vd, 3);
+
+      if(reduced){ setTimeout(function(){ markKept(boxesA,va); markKept(boxesD,vd); land(a,bd); }, 60); return; }
+      sndDie(0.02); sndDie(0.10);       // leaving the hand
+      sndDie(0.95); sndDie(1.05);       // clattering to rest
+      setTimeout(function(){
+        wrapA.classList.add("settle"); wrapD.classList.add("settle");
+        markKept(boxesA,va); markKept(boxesD,vd);
+        land(a,bd);
+      }, 1200);
+    }
+
+    function land(a,bd){
+      if(a===bd){
+        rollLog.textContent = "Tie on "+a+" — rolling again";
+        tone({f0:300,dur:0.10,type:"square",gain:0.07});
+        setTimeout(throwDice, reduced?200:850);
+        return;
+      }
+      var win=a>bd;
+      lastBattle={a:a, d:bd, rounds:rounds.slice()};   // kept for the game review
+      (win?wrapA:wrapD).classList.add("winner");
+      var v=document.getElementById("verdict");
+      v.textContent = win ? "Capture!" : "Attack repelled";
+      v.className = "verdict "+(win?"win":"lose");
+      document.getElementById("tallies").textContent = "Attacker "+a+"  ·  Defender "+bd;
+      rollLog.textContent = rounds.length>1 ? ("Rolls: "+rounds.join("  ·  ")) : "";
+      document.getElementById("verdictSub").textContent = win
+        ? NAME[atkType]+" takes the "+NAME[defType].toLowerCase()
+        : NAME[atkType]+" is lost; the "+NAME[defType].toLowerCase()+" holds";
+      win ? sndCapture() : sndRepel();
+
+      var go=document.getElementById("battleGo");
+      go.style.display="block";
+      /* preventScroll matters: on a phone the panel can be taller than the
+         viewport, and a plain focus() scrolls the button into view — which
+         pushes the dice the player is trying to read off the top. */
+      try{ go.focus({preventScroll:true}); }catch(err){ /* older browsers */ }
+      var done=false;
+      function finish(){
+        if(done) return; done=true;
+        ov.classList.remove("show");
+        go.removeEventListener("click", finish);
+        document.removeEventListener("keydown", onKey);
+        resolve(win);
+      }
+      function onKey(e){
+        if(e.key==="Enter"||e.key===" "||e.key==="Escape"){ e.preventDefault(); finish(); }
+      }
+      /* The overlay stays until the player dismisses it — no timeout, and no
+         click-outside, so a stray click can never skip the result. */
+      go.addEventListener("click", finish);
+      document.addEventListener("keydown", onKey);
+    }
+  });
+}
+
+/* ================= committing a move ================= */
+function movesFrom(sq){
+  return legalCache.filter(function(m){return m.from===sq;});
+}
+function commit(mv){
+  if(busy||gameOver) return;
+  busy=true; selected=null;
+  var b=state.board, pc=b[mv.from], atkColor=pc[0], atkType=pc[1];
+  var isBattle = mv.capture && atkType!=="k";
+
+  if(!isBattle){
+    finalize(mv, true, null);
+    return;
+  }
+  var defSq = mv.ep ? idx(rowOf(mv.from),colOf(mv.to)) : mv.to;
+  var defPc = b[defSq], defType=defPc[1], defColor=defPc[0];
+  render();
+  battle(atkType, atkColor, defType, defColor, sqName(mv.to)).then(function(win){
+    finalize(mv, win, {defType:defType});
+  });
+}
+
+function finalize(mv, success, extra){
+  var moverColor = state.turn;
+  var atkType = (state.board[mv.from] || "  ")[1];
+  var res = applyMove(state, mv, success);
+  state.board = res.board;
+  state.castling = res.castling;
+  state.ep = res.ep;
+  state.halfmove = res.halfmove;
+  if(res.captured){ state.graves[res.captured.color].push(res.captured.type); }
+  lastMove = {from:mv.from, to:mv.to, success:success, capture:!!mv.capture, fresh:true};
+  var pieceLanded = !(mv.capture && !success && atkType!=="k");   // a repelled attacker vanishes
+
+  /* Everything the review panel needs to narrate this ply later. */
+  var plyDetail = {
+    from:mv.from, to:mv.to, piece:atkType,
+    capture:!!mv.capture, success:success,
+    victim: (extra && extra.defType) ? extra.defType : (res.captured ? res.captured.type : null),
+    rolls: (mv.capture && lastBattle) ? lastBattle.rounds : null
+  };
+  lastBattle=null;
+
+  var noteResult = mv.capture ? success : null;
+
+  // does the mover's own king stand in check now?
+  var moverInCheck = inCheck(state.board, moverColor);
+  var suffix="";
+  var turnPassed=false;
+
+  if(moverInCheck){
+    state.continuation = true;
+    legalCache = legalMoves(state, moverColor);
+    if(legalCache.length===0){
+      suffix="#";
+      pushHistory(moverColor, mv, noteResult, suffix, plyDetail);
+      busy=false;
+      return endGame("Checkmate", cap(NAME_COLOR(opp(moverColor)))+" wins.");
+    }
+    suffix="+";
+  } else {
+    state.turn = opp(moverColor);
+    state.continuation = false;
+    turnPassed = true;
+    // repetition + draw checks on the new position
+    var key = posKey(state);
+    state.posCounts[key] = (state.posCounts[key]||0)+1;
+    legalCache = legalMoves(state, state.turn);
+    var nextInCheck = inCheck(state.board, state.turn);
+    if(nextInCheck) suffix="+";
+
+    if(legalCache.length===0){
+      if(nextInCheck){
+        suffix="#";
+        pushHistory(moverColor, mv, noteResult, suffix, plyDetail);
+        busy=false;
+        return endGame("Checkmate", cap(NAME_COLOR(moverColor))+" wins.");
+      } else {
+        pushHistory(moverColor, mv, noteResult, "", plyDetail);
+        busy=false;
+        return endGame("Stalemate", "Draw — "+NAME_COLOR(state.turn)+" has no legal move.");
+      }
+    }
+    if(state.posCounts[key] >= 3){
+      pushHistory(moverColor, mv, noteResult, suffix, plyDetail);
+      busy=false;
+      return endGame("Threefold repetition", "Draw — the position has occurred three times.");
+    }
+    if(state.halfmove >= 100){
+      pushHistory(moverColor, mv, noteResult, suffix, plyDetail);
+      busy=false;
+      return endGame("Fifty-move rule", "Draw — 50 moves with no pawn move or capture.");
+    }
+    if(insufficient(state.board)){
+      pushHistory(moverColor, mv, noteResult, suffix, plyDetail);
+      busy=false;
+      return endGame("Insufficient material", "Draw — neither side can deliver mate.");
+    }
+  }
+
+  pushHistory(moverColor, mv, noteResult, suffix, plyDetail);
+  busy=false;
+  render();
+  if(pieceLanded) slidePiece(mv.from, mv.to);
+  if(!mv.capture) sndMove();
+  if(inCheck(state.board, state.turn)) sndCheck();
+  lastMove.fresh=false;
+  maybeBot();
+}
+
+/* Slide the moved piece from its origin to its destination (FLIP): the board is
+   already re-rendered, so offset the arrived piece back to where it came from
+   and let it transition home. Makes the bot's move readable at a glance. */
+function slidePiece(fromIdx, toIdx){
+  if(reduced) return;
+  var flip = rotate && state.turn==="b";
+  var d = function(i){ return flip ? 63-i : i; };
+  var fromCell=boardEl.children[d(fromIdx)], toCell=boardEl.children[d(toIdx)];
+  if(!fromCell||!toCell) return;
+  var g=toCell.querySelector(".glyph");
+  if(!g) return;
+  var dx=fromCell.offsetLeft-toCell.offsetLeft, dy=fromCell.offsetTop-toCell.offsetTop;
+  if(!dx && !dy) return;
+  g.style.transition="none";
+  g.style.transform="translate("+dx+"px,"+dy+"px)";
+  requestAnimationFrame(function(){
+    g.style.transition="transform .30s cubic-bezier(.22,.68,.28,1)";
+    g.style.transform="";
+  });
+}
+
+function NAME_COLOR(c){return c==="w"?"White":"Black";}
+function cap(s){return s;}
+
+function pushHistory(color, mv, result, suffix, detail){
+  var txt = longNotation(mv, result) + suffix;
+  var e = {color:color, txt:txt, cont: state.continuation && inCheck(state.board,color)};
+  if(detail) for(var k in detail) e[k]=detail[k];
+  state.history.push(e);
+  /* Exactly one call per ply on every path, so this keeps the snapshots aligned:
+     snaps[0] is the start and snaps[i+1] is the position after history[i]. */
+  state.snaps.push({board: state.board.slice(), turn: state.turn,
+                    graves:{w:state.graves.w.slice(), b:state.graves.b.slice()}});
+  /* Also here rather than in finalize: several paths return early into endGame,
+     and a lesson can legitimately be completed by the move that ends the game. */
+  checkLesson(e);
+  renderLog();
+}
+
+/* Human-readable account of one ply, used by the review panel. */
+function describePly(h){
+  if(!h) return "Starting position";
+  var who = h.color==="w" ? "White" : "Black";
+  var s = who + " · " + (h.piece ? NAME[h.piece] : "") + " " + h.txt.replace(/[✓✗]/g,"").trim();
+  if(h.capture){
+    s += h.success ? "  —  captured the "+NAME[h.victim].toLowerCase()
+                   : "  —  repelled, the "+NAME[h.piece].toLowerCase()+" is lost";
+    if(h.rolls && h.rolls.length){
+      s += "   (" + h.rolls.join(", ") + ")";
+    }
+  }
+  return s;
+}
+
+/* ================= rendering ================= */
+var boardEl=document.getElementById("board");
+var flipped=false;   // manual "Flip board", independent of the auto-rotate option
+
+/* Which way the board faces: the auto-rotate option, inverted by a manual flip. */
+function boardFlip(sideToMove){
+  var auto = rotate && sideToMove==="b";
+  return auto !== flipped;      // XOR
+}
+
+function buildBoard(){
+  boardEl.innerHTML="";
+  for(var d=0;d<64;d++){
+    var btn=document.createElement("button");
+    btn.className="sq";
+    btn.type="button";
+    btn.setAttribute("role","gridcell");
+    btn.addEventListener("click", onSquareClick);
+    btn.addEventListener("pointerdown", onPointerDown);
+    btn.addEventListener("pointermove", onPointerMove);
+    btn.addEventListener("pointerup", onPointerUp);
+    btn.addEventListener("pointercancel", endDrag);
+    boardEl.appendChild(btn);
+  }
+}
+function displayIndex(d){ return rotate && state.turn==="b" ? 63-d : d; }
+
+function render(){
+  /* In review mode the board comes from a stored snapshot and the highlights
+     from that ply's history entry; live play is untouched. */
+  var snap  = reviewing() ? state.snaps[reviewIdx] : null;
+  var board = snap ? snap.board : state.board;
+  var sideToMove = snap ? snap.turn : state.turn;
+  var lm = reviewing()
+    ? (reviewIdx>0 ? state.history[reviewIdx-1] : null)
+    : lastMove;
+
+  var flip = boardFlip(sideToMove);
+  var cells=boardEl.children;
+  var checkColor = inCheck(board, sideToMove) ? sideToMove : null;
+  var checkSq = checkColor ? kingSq(board, checkColor) : -1;
+  var sel = reviewing() ? null : selected;
+  var targets = sel!=null ? movesFrom(sel) : [];
+  var targetTo = {};
+  targets.forEach(function(m){ targetTo[m.to]=m.capture?"cap":"move"; });
+
+  for(var d=0;d<64;d++){
+    var i=flip?63-d:d;
+    var cell=cells[d];
+    var r=rowOf(i), c=colOf(i);
+    cell.className="sq"+(((r+c)&1)?" dark":"");
+    cell.dataset.i=i;
+    var pc=board[i];
+    var inner="";
+    if(pc){ inner=pieceSVG(pc[0], pc[1]); }
+    if(sel===i) cell.classList.add("sel");
+    if(lm){
+      if(lm.from===i) cell.classList.add("lastFrom");
+      if(lm.to===i){ cell.classList.add("lastTo"); if(lm.fresh) cell.classList.add("pulse"); }
+    }
+    if(i===checkSq) cell.classList.add("check");
+    if(dragState && dragState.from===i) cell.classList.add("dragSource");
+    if(dragState && dragState.targets[i]) cell.classList.add("dropTarget");
+    if(hintSq===i) cell.classList.add("hintFrom");
+    if(missFrom===i) cell.classList.add("missFrom");
+    if(missTo===i) cell.classList.add("missTo");
+    if(targetTo[i]==="move") inner+='<span class="move-dot"></span>';
+    if(targetTo[i]==="cap") inner+='<span class="capture-ring"></span>';
+    // coordinates only along the two visible edges, as chess apps do
+    if(d>=56) inner+='<span class="coord file">'+FILES[c]+'</span>';
+    if(d%8===0) inner+='<span class="coord rank">'+(8-r)+'</span>';
+    cell.innerHTML=inner;
+
+    var mine = !reviewing() && pc && pc[0]===state.turn && !gameOver && !busy && !puzzleFrozen();
+    var hasMoves = mine && legalCache.some(function(m){return m.from===i;});
+    if(hasMoves || (sel!=null && targetTo[i])) cell.classList.add("pickable");
+    cell.disabled = gameOver || busy || reviewing() || puzzleFrozen();
+    cell.setAttribute("aria-label", sqName(i)+(pc?(" "+NAME_COLOR(pc[0])+" "+NAME[pc[1]]):" empty"));
+  }
+  renderStatus();
+  renderGraves();
+  var rb=document.getElementById("reviewBtn");
+  rb.disabled = !(state.history.length && (gameOver || reviewing()));
+  rb.querySelector(".tTxt").textContent = reviewing() ? "Close" : "Review";
+}
+
+function renderStatus(){
+  var sl=document.getElementById("statusLine");
+  var ss=document.getElementById("statusSub");
+  var td=document.getElementById("turnDot");
+  var tt=document.getElementById("turnText");
+  td.className="dot "+state.turn;
+  tt.textContent = NAME_COLOR(state.turn)+"’s turn"+
+    (botOn ? (state.turn===botSide ? " · computer" : " · you") : "");
+  if(reviewing()){
+    var n=state.history.length;
+    sl.textContent = "Reviewing the game";
+    ss.textContent = "Move "+reviewIdx+" of "+n+" · arrow keys to step through";
+    return;
+  }
+  if(gameOver) return;
+  if(thinking){
+    sl.textContent = "Computer is thinking";
+    ss.innerHTML = '<span class="thinking"><span class="pulse"></span>Weighing the odds…</span>';
+    return;
+  }
+  var checked = inCheck(state.board, state.turn);
+  if(state.continuation){
+    sl.textContent = NAME_COLOR(state.turn)+" is in check";
+    ss.textContent = "Play on — keep moving until your King is safe.";
+  } else if(checked){
+    sl.textContent = NAME_COLOR(state.turn)+" is in check";
+    ss.textContent = "Escape the check: move the King, block, or capture the checker.";
+  } else {
+    sl.textContent = NAME_COLOR(state.turn)+" to move";
+    ss.textContent = selected!=null ? "Tap a highlighted square." : "Tap a piece to see its moves.";
+  }
+}
+
+/* Player cards: each side shows the pieces IT has captured and its material
+   lead, the way chess apps present it — not "what I lost", which reads backwards. */
+function renderGraves(){
+  var src = reviewing() ? state.snaps[reviewIdx].graves : state.graves;
+  var sideToMove = reviewing() ? state.snaps[reviewIdx].turn : state.turn;
+  var flip = boardFlip(sideToMove);
+  var topSide = flip ? "w" : "b";          // colour sitting at the top of the board
+  var botSide = opp(topSide);
+
+  function pts(list){ return list.reduce(function(s,t){return s+VAL[t];},0); }
+  var lead = { w: pts(src.b)-pts(src.w), b: pts(src.w)-pts(src.b) };
+
+  function fill(pos, side){
+    var taken = src[opp(side)].slice().sort(function(a,b){return VAL[b]-VAL[a];});
+    document.getElementById("av"+pos).innerHTML = pieceSVG(side,"k");
+    var label = NAME_COLOR(side);
+    var sub = botOn ? (side===botSide2() ? "computer" : "you") : "";
+    document.getElementById("name"+pos).innerHTML =
+      label + (sub ? ' <span class="sub">· '+sub+'</span>' : '');
+    document.getElementById("taken"+pos).innerHTML =
+      taken.map(function(t){ return pieceSVG(opp(side), t); }).join("");
+    document.getElementById("adv"+pos).textContent = lead[side]>0 ? ("+"+lead[side]) : "";
+    var card=document.getElementById("card"+pos);
+    card.classList.toggle("toMove", !reviewing() && !gameOver && sideToMove===side);
+  }
+  function botSide2(){ return botSide; }
+  fill("Top", topSide);
+  fill("Bottom", botSide);
+}
+
+function renderLog(){
+  var el=document.getElementById("log");
+  if(state.history.length===0){ el.innerHTML='<span class="empty">The game hasn’t started.</span>'; return; }
+  var n=0;
+  /* Group plies into numbered rows with a White and a Black column. A Gambit
+     turn can hold several plies (playing on out of check), so a row keeps
+     filling its column rather than assuming one ply per side. */
+  var rows=[], cur=null;
+  state.history.forEach(function(h,ix){
+    if(h.color==="w" && !h.cont){ n++; cur={n:n, w:[], b:[]}; rows.push(cur); }
+    if(!cur){ n++; cur={n:n, w:[], b:[]}; rows.push(cur); }
+    cur[h.color].push({ix:ix+1, txt:h.txt});
+  });
+  function cell(list){
+    if(!list.length) return '<span class="ply blank"></span>';
+    return list.map(function(p){
+      var mv=p.txt.replace(/✓/g,'<span class="ok">✓</span>').replace(/✗/g,'<span class="no">✗</span>');
+      var here = reviewing() && reviewIdx===p.ix ? " at" : "";
+      return '<span class="ply'+here+'" data-ply="'+p.ix+'">'+mv+'</span>';
+    }).join("");
+  }
+  el.innerHTML = rows.map(function(r){
+    return '<div class="moveRow"><span class="n">'+r.n+'.</span>'+
+           cell(r.w)+cell(r.b)+'</div>';
+  }).join("");
+  if(reviewing()){
+    var at=el.querySelector(".ply.at");
+    if(at) at.scrollIntoView({block:"nearest"});
+  } else {
+    el.scrollTop = el.scrollHeight;
+  }
+}
+
+/* ================= computer opponent =================
+   Expectiminimax. Every capture is a chance node: 50% the attacker takes the
+   square, 50% the attacker is removed. So the engine plays the *expected*
+   value of an attack, which is what makes it respect the Gambit maths —
+   trading down is a losing proposition even when the capture "looks" good. */
+
+var PVAL={p:100,n:320,b:330,r:500,q:900,k:0};
+
+/* piece-square tables, white's view, index 0 = a8 */
+var PST={
+p:[  0,  0,  0,  0,  0,  0,  0,  0,
+    50, 50, 50, 50, 50, 50, 50, 50,
+    10, 10, 20, 30, 30, 20, 10, 10,
+     5,  5, 10, 25, 25, 10,  5,  5,
+     0,  0,  0, 20, 20,  0,  0,  0,
+     5, -5,-10,  0,  0,-10, -5,  5,
+     5, 10, 10,-20,-20, 10, 10,  5,
+     0,  0,  0,  0,  0,  0,  0,  0],
+n:[-50,-40,-30,-30,-30,-30,-40,-50,
+   -40,-20,  0,  0,  0,  0,-20,-40,
+   -30,  0, 10, 15, 15, 10,  0,-30,
+   -30,  5, 15, 20, 20, 15,  5,-30,
+   -30,  0, 15, 20, 20, 15,  0,-30,
+   -30,  5, 10, 15, 15, 10,  5,-30,
+   -40,-20,  0,  5,  5,  0,-20,-40,
+   -50,-40,-30,-30,-30,-30,-40,-50],
+b:[-20,-10,-10,-10,-10,-10,-10,-20,
+   -10,  0,  0,  0,  0,  0,  0,-10,
+   -10,  0,  5, 10, 10,  5,  0,-10,
+   -10,  5,  5, 10, 10,  5,  5,-10,
+   -10,  0, 10, 10, 10, 10,  0,-10,
+   -10, 10, 10, 10, 10, 10, 10,-10,
+   -10,  5,  0,  0,  0,  0,  5,-10,
+   -20,-10,-10,-10,-10,-10,-10,-20],
+r:[  0,  0,  0,  0,  0,  0,  0,  0,
+     5, 10, 10, 10, 10, 10, 10,  5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+     0,  0,  0,  5,  5,  0,  0,  0],
+q:[-20,-10,-10, -5, -5,-10,-10,-20,
+   -10,  0,  0,  0,  0,  0,  0,-10,
+   -10,  0,  5,  5,  5,  5,  0,-10,
+    -5,  0,  5,  5,  5,  5,  0, -5,
+     0,  0,  5,  5,  5,  5,  0, -5,
+   -10,  5,  5,  5,  5,  5,  0,-10,
+   -10,  0,  5,  0,  0,  0,  0,-10,
+   -20,-10,-10, -5, -5,-10,-10,-20],
+k:[-30,-40,-40,-50,-50,-40,-40,-30,
+   -30,-40,-40,-50,-50,-40,-40,-30,
+   -30,-40,-40,-50,-50,-40,-40,-30,
+   -30,-40,-40,-50,-50,-40,-40,-30,
+   -20,-30,-30,-40,-40,-30,-30,-20,
+   -10,-20,-20,-20,-20,-20,-20,-10,
+    20, 20,  0,  0,  0,  0, 20, 20,
+    20, 30, 10,  0,  0, 10, 30, 20]
+};
+
+var LEVELS={
+  easy:  {depth:1, random:0.45, budget:  30000},
+  medium:{depth:2, random:0.12, budget: 150000},
+  hard:  {depth:3, random:0,    budget: 500000},
+  master:{depth:4, random:0,    budget: 900000}   /* ~2.5s worst case */
+};
+
+var MATE=100000, nodes=0, nodeBudget=0;
+
+function mkState(res, turn){
+  return {board:res.board, castling:res.castling, ep:res.ep, halfmove:res.halfmove, turn:turn};
+}
+
+/* score from the perspective of the side to move */
+function evaluate(st){
+  var b=st.board, me=st.turn, s=0;
+  for(var i=0;i<64;i++){
+    var pc=b[i]; if(!pc) continue;
+    var c=pc[0], t=pc[1];
+    var pi = c==="w" ? i : ((7-(i>>3))*8 + (i&7));
+    var v = PVAL[t] + PST[t][pi];
+    s += (c===me) ? v : -v;
+  }
+  return s;
+}
+
+function orderMoves(st, moves){
+  var b=st.board;
+  for(var i=0;i<moves.length;i++){
+    var m=moves[i], atkT=b[m.from][1], atk=PVAL[atkT];
+    if(m.capture){
+      var vT = m.ep ? "p" : (b[m.to] ? b[m.to][1] : "p");
+      var victim = PVAL[vT];
+      /* order by the capture's actual expected value, so the queen's better
+         odds put her attacks where they belong */
+      var p = (atkT==="k") ? 1 : captureOdds(atkT, vT);
+      m._s = 10000 + (p*victim - (1-p)*atk);
+    } else if(m.promo){ m._s = 5000; }
+    else { m._s = 0; }
+  }
+  moves.sort(function(a,c){ return c._s - a._s; });
+}
+
+function negamax(st, depth, alpha, beta){
+  if(++nodes > nodeBudget) return evaluate(st);
+  if(depth<=0) return evaluate(st);
+  var moves = legalMoves(st, st.turn);
+  if(moves.length===0){
+    return inCheck(st.board, st.turn) ? -(MATE+depth) : 0;   /* mate or stalemate */
+  }
+  orderMoves(st, moves);
+  var best=-Infinity;
+  for(var i=0;i<moves.length;i++){
+    var v = moveValue(st, moves[i], depth, alpha, beta);
+    if(v>best) best=v;
+    if(best>alpha) alpha=best;
+    if(alpha>=beta) break;
+  }
+  return best;
+}
+
+/* a capture is a chance node — average the two equally likely outcomes.
+   No alpha-beta window is passed into a chance node's children: pruning is
+   only sound once both branches are known. */
+function moveValue(st, mv, depth, alpha, beta){
+  var isBattle = mv.capture && st.board[mv.from][1]!=="k";
+  if(!isBattle) return afterMove(st, mv, true, depth, alpha, beta);
+  var won  = afterMove(st, mv, true,  depth, -Infinity, Infinity);
+  var lost = afterMove(st, mv, false, depth, -Infinity, Infinity);
+  /* Weight by this matchup's real odds, not a flat half: only a pawn attacks at
+     50%. A knight, bishop or rook is 69.4% and the queen 79.2%, so a flat 0.5
+     would make the bot undervalue nearly every capture it can make. */
+  var victim = mv.ep ? "p" : st.board[mv.to][1];
+  var p = captureOdds(st.board[mv.from][1], victim);
+  return p*won + (1-p)*lost;
+}
+
+function afterMove(st, mv, success, depth, alpha, beta){
+  var mover = st.turn;
+  var res = applyMove(st, mv, success);
+  /* Gambit rule: a failed capture that exposes your own king leaves you on
+     move — you keep playing until the king is safe. Same side, not negated. */
+  if(inCheck(res.board, mover)){
+    return negamax(mkState(res, mover), depth-1, alpha, beta);
+  }
+  return -negamax(mkState(res, opp(mover)), depth-1, -beta, -alpha);
+}
+
+function chooseBotMove(st, levelKey){
+  var cfg = LEVELS[levelKey] || LEVELS.medium;
+  var moves = legalMoves(st, st.turn);
+  if(moves.length===0) return null;
+  if(cfg.random>0 && Math.random()<cfg.random){
+    return moves[Math.floor(Math.random()*moves.length)];
+  }
+  nodes=0; nodeBudget=cfg.budget;
+  orderMoves(st, moves);
+  var bestVal=-Infinity, best=[];
+  for(var i=0;i<moves.length;i++){
+    var v = moveValue(st, moves[i], cfg.depth, -Infinity, Infinity);
+    if(v > bestVal+1e-9){ bestVal=v; best=[moves[i]]; }
+    else if(Math.abs(v-bestVal)<1e-9){ best.push(moves[i]); }
+  }
+  return best[Math.floor(Math.random()*best.length)];   /* vary equal choices */
+}
+
+var botOn=false, botSide="b", botLevel="medium", thinking=false;
+
+function maybeBot(){
+  /* Puzzles script the opponent's replies, so the search must stay out of it. */
+  if(puzzleActive) return;
+  if(!botOn || gameOver || busy || thinking) return;
+  if(state.turn !== botSide) return;
+  thinking=true; busy=true;
+  render();
+  /* Deliberately unhurried. The search itself takes 1–100ms, which is far too
+     fast to follow — the pause plus the from/to highlights are what let you see
+     what the computer actually played. */
+  var THINK_MS = 900;
+  var t0 = Date.now();
+  setTimeout(function(){
+    var mv=null;
+    try { mv = chooseBotMove(state, botLevel); }
+    catch(err){ mv = null; }
+    var wait = Math.max(0, THINK_MS - (Date.now()-t0));
+    setTimeout(function(){
+      thinking=false; busy=false;
+      if(mv) commit(mv); else render();
+    }, wait);
+  }, 60);
+}
+
+/* ================= drag and drop =================
+   Pointer events rather than HTML5 drag-and-drop: they work identically for
+   mouse and touch, and let the piece follow the finger. A press that never
+   moves far falls through to the existing tap-to-select behaviour. */
+var dragState=null;
+var DRAG_THRESHOLD=6;   // px before a press becomes a drag
+/* A pointerdown is followed by a click on the same square. Without this, the
+   pointerdown selects the piece and the click immediately toggles it back off,
+   so a plain tap would appear to do nothing. Squares stay <button>s so the
+   keyboard still works, which is why the click handler has to remain. */
+var suppressClick=-1;
+
+function squareIndexFromPoint(x,y){
+  var cells=boardEl.children;
+  for(var d=0;d<64;d++){
+    var r=cells[d].getBoundingClientRect();
+    if(x>=r.left && x<=r.right && y>=r.top && y<=r.bottom) return parseInt(cells[d].dataset.i,10);
+  }
+  return -1;
+}
+
+function onPointerDown(e){
+  suppressClick=-1;
+  if(busy||gameOver||puzzleFrozen()||e.button===1||e.button===2) return;
+  var i=parseInt(this.dataset.i,10);
+  var pc=state.board[i];
+  if(!pc || pc[0]!==state.turn) return;
+  var moves=legalCache.filter(function(m){return m.from===i;});
+  if(!moves.length) return;
+
+  audio();   // first user gesture — unlock sound
+  var targets={};
+  moves.forEach(function(m){ targets[m.to]=true; });
+  if(e.cancelable) e.preventDefault();   // stop the touch becoming a page pan
+  dragState={from:i, targets:targets, startX:e.clientX, startY:e.clientY,
+             moved:false, ghost:null, pointerId:e.pointerId};
+  var wasSelected=(selected===i);
+  selected=i;
+  /* Only swallow the click when this press changed the selection — pressing an
+     already-selected piece should still let the click deselect it. */
+  if(!wasSelected) suppressClick=i;
+  render();
+  try{ this.setPointerCapture(e.pointerId); }catch(err){}
+}
+
+function onPointerMove(e){
+  if(!dragState || e.pointerId!==dragState.pointerId) return;
+  if(e.cancelable) e.preventDefault();
+  var dx=e.clientX-dragState.startX, dy=e.clientY-dragState.startY;
+  if(!dragState.moved && Math.hypot(dx,dy) < DRAG_THRESHOLD) return;
+
+  if(!dragState.moved){
+    dragState.moved=true;
+    document.body.classList.add("dragging");
+    var pc=state.board[dragState.from];
+    var ghost=document.createElement("div");
+    ghost.className="dragGhost";
+    ghost.innerHTML=pieceSVG(pc[0], pc[1]);
+    var svg=ghost.querySelector("svg");
+    svg.style.width="100%"; svg.style.height="100%";
+    document.body.appendChild(ghost);
+    dragState.ghost=ghost;
+    render();
+  }
+  dragState.ghost.style.left=e.clientX+"px";
+  dragState.ghost.style.top =e.clientY+"px";
+}
+
+function onPointerUp(e){
+  if(!dragState || e.pointerId!==dragState.pointerId) return;
+  var st=dragState, over=-1;
+  if(st.moved) over=squareIndexFromPoint(e.clientX, e.clientY);
+  endDrag();
+  if(!st.moved) return;                 // a tap: leave the piece selected
+  suppressClick=st.from;                // the trailing click lands on the source
+  if(over<0 || !st.targets[over]){ selected=null; render(); return; }
+  playMove(st.from, over);
+}
+
+function endDrag(){
+  if(!dragState) return;
+  if(dragState.ghost) dragState.ghost.remove();
+  document.body.classList.remove("dragging");
+  dragState=null;
+  render();
+}
+
+/* Shared by click and drag: run the move from -> to, asking about promotion. */
+function playMove(from, to){
+  var cands=legalCache.filter(function(m){return m.from===from && m.to===to;});
+  if(!cands.length){ selected=null; render(); return; }
+  if(cands.length>1 && cands[0].promo){
+    choosePromo(function(pp){
+      commit(cands.filter(function(m){return m.promo===pp;})[0] || cands[0]);
+    });
+    return;
+  }
+  commit(cands[0]);
+}
+
+/* ================= interaction ================= */
+function onSquareClick(e){
+  if(busy||gameOver||puzzleFrozen()) return;
+  audio();                       // first user gesture — unlock sound
+  var i=parseInt(this.dataset.i,10);
+  if(suppressClick===i){ suppressClick=-1; return; }
+  suppressClick=-1;
+  var pc=state.board[i];
+  if(selected===null){
+    if(pc && pc[0]===state.turn && legalCache.some(function(m){return m.from===i;})){
+      selected=i; render();
+    }
+    return;
+  }
+  if(i===selected){ selected=null; render(); return; }
+  if(pc && pc[0]===state.turn && legalCache.some(function(m){return m.from===i;})){
+    selected=i; render(); return;
+  }
+  playMove(selected, i);
+}
+
+function choosePromo(cb){
+  var ov=document.getElementById("overlay");
+  document.getElementById("battleKicker").textContent="Promote to";
+  document.getElementById("atkGlyph").innerHTML="";
+  document.getElementById("defGlyph").innerHTML="";
+  document.querySelector(".battle .versus").style.display="none";
+  document.querySelector(".battle .roles").style.display="none";
+  document.querySelector(".battle .dice").style.display="none";
+  document.getElementById("tallies").textContent="";
+  document.getElementById("verdict").textContent="";
+  document.getElementById("verdictSub").textContent="";
+  var go=document.getElementById("battleGo");
+  go.style.display="none";
+  var wrap=document.createElement("div");
+  wrap.className="dice"; wrap.id="promoWrap";
+  ["q","r","b","n"].forEach(function(pp){
+    var b=document.createElement("button");
+    b.type="button"; b.style.cursor="pointer"; b.style.border="0"; b.style.background="none";
+    b.style.padding="0"; b.style.width="52px"; b.style.height="52px";
+    b.innerHTML=pieceSVG(state.turn, pp);
+    b.querySelector("svg").style.width="100%";
+    b.querySelector("svg").style.height="100%";
+    b.setAttribute("aria-label","Promote to "+NAME[pp]);
+    b.addEventListener("click",function(){
+      ov.classList.remove("show"); wrap.remove();
+      document.querySelector(".battle .versus").style.display="";
+      document.querySelector(".battle .roles").style.display="";
+      document.querySelector(".battle .dice").style.display="";
+      cb(pp);
+    });
+    wrap.appendChild(b);
+  });
+  document.querySelector(".battle").insertBefore(wrap, go);
+  ov.classList.add("show");
+}
+
+/* ================= game review =================
+   Steps through the finished game from stored snapshots. Nothing is replayed,
+   so the dice results you actually got are the ones you see. */
+function enterReview(atPly){
+  if(!state.history.length) return;
+  endDrag();
+  selected=null;
+  reviewIdx = (atPly==null) ? state.history.length : atPly;
+  document.getElementById("gameover").classList.remove("show");
+  document.getElementById("reviewBar").hidden=false;
+  renderReview();
+}
+function exitReview(){
+  reviewIdx=null;
+  document.getElementById("reviewBar").hidden=true;
+  render(); renderLog();
+  if(gameOver) document.getElementById("gameover").classList.add("show");
+}
+function reviewGo(i){
+  if(!reviewing()) return;
+  reviewIdx = Math.max(0, Math.min(state.history.length, i));
+  renderReview();
+}
+function renderReview(){
+  var n=state.history.length;
+  document.getElementById("rvCount").textContent = reviewIdx+" / "+n;
+  var h = reviewIdx>0 ? state.history[reviewIdx-1] : null;
+  var d = describePly(h);
+  if(h && h.capture){
+    d = d.replace("captured", '<span class="ok">captured</span>')
+         .replace("repelled", '<span class="no">repelled</span>');
+  }
+  document.getElementById("rvDesc").innerHTML = d;
+  document.getElementById("rvFirst").disabled = reviewIdx===0;
+  document.getElementById("rvPrev").disabled  = reviewIdx===0;
+  document.getElementById("rvNext").disabled  = reviewIdx===n;
+  document.getElementById("rvLast").disabled  = reviewIdx===n;
+  render(); renderLog();
+}
+
+/* ================= training =================
+   Five short lessons, each a real position played on the real engine — the dice
+   genuinely roll, so a lesson about losing a capture can actually lose it. */
+function fromLayout(rows){
+  var b=[];
+  rows.forEach(function(rw){
+    for(var k=0;k<rw.length;k++){
+      var ch=rw[k];
+      if(ch==="."){ b.push(""); }
+      else if(/[1-8]/.test(ch)){ for(var z=0;z<+ch;z++) b.push(""); }
+      else b.push((ch===ch.toLowerCase()?"b":"w")+ch.toLowerCase());
+    }
+  });
+  return b;
+}
+
+var LESSONS=[
+  {
+    title:"It is still chess",
+    text:"Every piece moves exactly as it does in ordinary chess. Castling, en passant and "+
+         "promotion are all unchanged. Nothing you already know stops being true.",
+    task:"Make any move.",
+    goal:function(h){ return true; },
+    board:null            // the normal starting position
+  },
+  {
+    title:"A capture is a fight",
+    text:"This is the one rule that changes. You do not simply take a piece — you attack it, "+
+         "and both sides roll. Each keeps its highest die, higher wins, ties re-roll. A pawn "+
+         "rolls one, so this attack is a straight 50/50.",
+    task:"Take the black pawn on d5 with your pawn on e4.",
+    goal:function(h){ return h.capture; },
+    turn:"w",
+    board:fromLayout(["....k...", "........", "........", "...p....",
+                      "....P...", "........", "........", "....K..."])
+  },
+  {
+    title:"Losing costs you the piece",
+    text:"If your attack loses the roll, your attacking piece is removed and the defender "+
+         "stays exactly where it was. You lose material and gain nothing. That is why "+
+         "attacking is a real decision here, not free.",
+    task:"Attack the rook with your pawn. Win or lose, watch what happens to the pawn.",
+    goal:function(h){ return h.capture; },
+    turn:"w",
+    board:fromLayout(["....k...", "........", "........", "...r....",
+                      "....P...", "........", "........", "....K..."])
+  },
+  {
+    title:"Big pieces attack with more dice",
+    text:"How many dice you roll to ATTACK depends on the piece: Queen three, Rook, Bishop "+
+         "and Knight two, Pawn one. You keep the highest — that is 79%, 69% and 50%. "+
+         "Defending, every piece rolls exactly one die, so extra dice make a piece better at "+
+         "taking, never harder to kill.",
+    task:"Capture the rook with your queen and watch all three dice.",
+    goal:function(h){ return h.capture && h.piece==="q"; },
+    turn:"w",
+    board:fromLayout(["....k...", "........", "........", "...r....",
+                      "........", "........", "........", "...QK..."])
+  },
+  {
+    title:"Check, and playing on",
+    text:"The King never rolls dice, so check and checkmate work exactly as in chess. "+
+         "But taking the checking piece is a battle like any other — and if you lose it, "+
+         "you are still in check. So your turn simply continues: you keep moving until the "+
+         "king is safe.",
+    task:"You are in check. Take the rook with your knight — if the knight loses, move again.",
+    goal:function(h){ return !inCheck(state.board, h.color); },
+    turn:"w",
+    /* K+N vs K+R+P — deliberately not a lone minor on either side, or the game
+       would end instantly as insufficient material before the lesson resolves. */
+    board:fromLayout(["....k...", "p.......", "........", "....r...",
+                      "........", "...N....", "........", "....K..."])
+  }
+];
+
+/* ================= tactical puzzles =================
+   Real positions. The opponent plays first, then the player has to find the
+   win. Captures resolve without dice here (see commit): a solution that hinges
+   on a capture would otherwise be unsolvable whenever the roll went against
+   you, which tests luck rather than the tactic. */
+function sqi(name){ return "abcdefgh".indexOf(name[0]) + (8-parseInt(name[1],10))*8; }
+function pm(from,to){ return {from:sqi(from), to:sqi(to)}; }   /* puzzle move spec */
+
+/* Real positions from actual openings and classic mating patterns, with full
+   boards — a tactic is only a tactic when there is a real position around it. */
+var PUZZLES={
+  easy:[
+    { theme:"Scholar's Mate", goal:"Mate in 1", moves:1,
+      hint:"The bishop on c4 already guards f7. Bring the queen there.",
+      /* 1.e4 e5 2.Bc4 Nc6 3.Qh5 — Black now defends the wrong way. */
+      board:fromLayout(["r.bqkbnr","pppp.ppp","..n.....","....p..Q",
+                        "..B.P...","........","PPPP.PPP","RNB.K.NR"]),
+      first:pm("g8","f6"), solution:[pm("h5","f7")], replies:[] },
+
+    { theme:"Back-rank mate", goal:"Mate in 1", moves:1,
+      hint:"Black's king is walled in by its own pawns. Take the eighth rank.",
+      board:fromLayout(["......k.","ppp..ppp",".......b",".......n",
+                        ".n......","....BN..","PPP..PPP","...R..K."]),
+      first:pm("a7","a6"), solution:[pm("d1","d8")], replies:[] },
+
+    { theme:"Win the queen", goal:"Win material", moves:1,
+      hint:"The knight on d5 covers the square the queen just stepped onto.",
+      board:fromLayout(["r.bq.rk.","ppp..ppp","........","n..N....",
+                        "....P...","........","PPP..PPP","R.BQ.RK."]),
+      first:pm("d8","e7"), solution:[pm("d5","e7")], replies:[] }
+  ],
+  medium:[
+    { theme:"Légal's Mate", goal:"Mate in 1", moves:1,
+      hint:"The knight on c3 can reach a square that covers every escape.",
+      /* 1.e4 e5 2.Nf3 Nc6 3.Bc4 d6 4.Nc3 Bg4 5.h3 Bh5 6.Nxe5 Bxd1 7.Bxf7+
+         Black's king must step to e7, and then the knight finishes it. */
+      board:fromLayout(["r..qkbnr","ppp..Bpp","..np....","....N...",
+                        "....P...","..N....P","PPPP.PP.","R.BbK..R"]),
+      first:pm("e8","e7"), solution:[pm("c3","d5")], replies:[] },
+
+    { theme:"Queen and bishop", goal:"Mate in 2", moves:2,
+      hint:"Check on f7 first — the bishop defends the queen there.",
+      /* The knight on b8 is what makes this work: it walls the rook off from
+         the f8 square, so the queen cannot simply be taken at the end. */
+      board:fromLayout(["rn....k.","ppp..ppp","........",".......Q",
+                        "..B.P...","........","PPP..PPP","R....RK."]),
+      first:pm("a7","a6"), solution:[pm("h5","f7"), pm("f7","f8")],
+      replies:[pm("g8","h8")] }
+  ],
+  hard:[
+    { theme:"Smothered Mate", goal:"Mate in 2", moves:2,
+      hint:"Offer the queen on g8. The rook is forced to take, and then it blocks.",
+      board:fromLayout(["r.bq.r.k","ppp...pp","..n....N","........",
+                        "........",".Q......","PPP..PPP","R.B..RK."]),
+      first:pm("a7","a6"), solution:[pm("b3","g8"), pm("h6","f7")],
+      replies:[pm("f8","g8")] }
+  ]
+};
+
+var training=false, lessonIdx=0, lessonDone=false;
+var trainTab="rules";
+var puzzleLvl="easy", puzzleIdx=0, puzzleStep=0;
+var puzzleActive=false, puzzleState="", hintSq=-1;
+/* Squares of a rejected move, kept on screen (red) until the player retries. */
+var missFrom=-1, missTo=-1;
+/* A halted puzzle freezes the board. This is deliberately NOT the `busy` flag:
+   checkPuzzle runs from inside pushHistory, which finalize() calls before its
+   own `busy=false`, so anything set there is immediately overwritten. */
+function puzzleFrozen(){
+  return puzzleActive && (puzzleState==="wrong" || puzzleState==="unlucky");
+}
+function puzzleList(){ return PUZZLES[puzzleLvl]||[]; }
+function currentPuzzle(){ return puzzleList()[puzzleIdx]; }
+
+function startTraining(){
+  training=true; lessonIdx=0;
+  /* Always against the computer: every lesson has the learner playing White, so
+     someone has to answer for Black. Choosing an opponent is what the menu is
+     for, so the Table panel's toggle is hidden here rather than left to confuse. */
+  botOn=true; botSide="b"; botLevel="easy";
+  document.getElementById("botToggle").checked=true;
+  document.getElementById("opponentBox").hidden=true;
+  document.getElementById("trainBar").hidden=false;
+  document.getElementById("trainActions").hidden=false;
+  document.getElementById("rail").hidden=true;
+  document.getElementById("cardTop").hidden=true;
+  document.getElementById("cardBottom").hidden=true;
+  setTrainTab("puzzles");   /* puzzles first; Rules is a tab away */
+}
+function stopTraining(){
+  training=false; lessonDone=false; puzzleActive=false; hintSq=-1;
+  missFrom=-1; missTo=-1;
+  document.getElementById("trainBar").hidden=true;
+  document.getElementById("trainActions").hidden=true;
+  document.getElementById("rail").hidden=false;
+  document.getElementById("cardTop").hidden=false;
+  document.getElementById("cardBottom").hidden=false;
+  document.getElementById("opponentBox").hidden=false;
+}
+function loadLesson(i){
+  lessonIdx=Math.max(0, Math.min(LESSONS.length-1, i));
+  var L=LESSONS[lessonIdx];
+  lessonDone=false;
+  newGame(true);                       // reset without leaving training
+  if(L.board){
+    state.board=L.board.slice();
+    state.turn=L.turn||"w";
+    state.castling={wK:false,wQ:false,bK:false,bQ:false};
+    state.ep=null;
+    state.snaps=[{board:state.board.slice(), turn:state.turn, graves:{w:[],b:[]}}];
+    state.posCounts={}; state.posCounts[posKey(state)]=1;
+    legalCache=legalMoves(state, state.turn);
+  }
+  renderLesson();
+  render(); renderLog();
+}
+function renderLesson(){
+  var L=LESSONS[lessonIdx];
+  document.getElementById("coachChip").className="coachChip w";
+  document.getElementById("coachTitle").textContent=L.title;
+  var t=document.getElementById("coachText");
+  t.className = "coachText" + (lessonDone ? " done" : "");
+  t.textContent = lessonDone ? "Done — nicely played." : (L.text+"  "+L.task);
+  document.getElementById("coachMeta").textContent =
+    "Lesson "+(lessonIdx+1)+" of "+LESSONS.length;
+  document.getElementById("tPrev").disabled = lessonIdx===0;
+  var next=document.getElementById("tNext");
+  next.textContent = lessonIdx===LESSONS.length-1 ? "Finish" : (lessonDone ? "Next lesson" : "Skip");
+}
+/* ---- puzzle flow ---- */
+var puzzleGrade=null, lastGrade=null;
+function isMateGoal(P){ return P.goal.indexOf("Mate")===0; }
+
+/* Score the move the player actually made against the puzzle's move, using the
+   same search the computer opponent uses, and describe the gap the way a chess
+   trainer would rather than just saying "wrong". */
+function gradeMove(h, want){
+  try{
+    var prev=state.snaps[state.snaps.length-2];       // position before this ply
+    if(!prev) return {label:"Not the move", note:"Try again."};
+    var st={board:prev.board.slice(), turn:prev.turn,
+            castling:{wK:false,wQ:false,bK:false,bQ:false}, ep:null, halfmove:0};
+    var ms=legalMoves(st, st.turn);
+    function pick(f,t){ return ms.filter(function(m){return m.from===f&&m.to===t;})[0]; }
+    var mPlayed=pick(h.from,h.to), mBest=pick(want.from,want.to);
+    if(!mPlayed||!mBest) return {label:"Not the move", note:"Try again."};
+
+    /* Same depth for the played move and for every alternative, or the two are
+       not comparable and an ordinary developing move looks far worse than it is. */
+    var GRADE_DEPTH=2;
+    nodes=0; nodeBudget=400000;
+    var vPlayed=moveValue(st, mPlayed, GRADE_DEPTH, -Infinity, Infinity);
+
+    /* Against a forced mate every other move scores about -100000, so grading
+       off the solution alone calls a sensible developing move a blunder. Judge
+       the move against the best ALTERNATIVE instead, and report the missed mate
+       separately. */
+    var vAlt=-Infinity;
+    for(var i=0;i<ms.length;i++){
+      if(ms[i].from===mBest.from && ms[i].to===mBest.to) continue;
+      var v=moveValue(st, ms[i], GRADE_DEPTH, -Infinity, Infinity);
+      if(v>vAlt) vAlt=v;
+    }
+    if(vAlt===-Infinity) vAlt=vPlayed;
+    var gap=vAlt-vPlayed;                     // how far below the best alternative
+
+    /* Ask the board, not the score. A mating capture is a chance node, so its
+       expected value is only ~69% of the mate score and never clears MATE. */
+    function matesAfter(m){
+      var res=applyMove(st, m, true);
+      var nxt={board:res.board, turn:opp(st.turn), castling:res.castling,
+               ep:res.ep, halfmove:0};
+      return legalMoves(nxt, nxt.turn).length===0 && inCheck(nxt.board, nxt.turn);
+    }
+    var mateWasThere = matesAfter(mBest);
+    lastGrade={gap:Math.round(gap), vPlayed:Math.round(vPlayed),
+               vAlt:Math.round(vAlt), mate:mateWasThere, moves:ms.length};
+
+    /* A concrete reason beats a verdict. Look at the position the played move
+       actually produced and name what is wrong with it — never what the answer
+       is. Deliberately says nothing about which piece or square to use. */
+    function why(){
+      var res=applyMove(st, mPlayed, true);
+      var nb=res.board, me=st.turn, them=opp(me);
+      var moved=nb[mPlayed.to];
+      // 1. the piece just moved can be taken where it stands
+      if(moved && isAttacked(nb, rowOf(mPlayed.to), colOf(mPlayed.to), them)){
+        var nm = NAME[moved[1]].toLowerCase();
+        return "Your "+nm+" can be taken on "+sqName(mPlayed.to)+" — and in this game you "
+             + "only get the piece back if the dice go your way.";
+      }
+      // 2. it walked away from a defended piece and left something else hanging
+      for(var s=0;s<64;s++){
+        var p=nb[s];
+        if(!p || p[0]!==me || p[1]==="k" || s===mPlayed.to) continue;
+        if(!isAttacked(nb, rowOf(s), colOf(s), them)) continue;
+        if(isAttacked(st.board, rowOf(s), colOf(s), them)) continue;   // already was
+        return "It leaves your "+NAME[p[1]].toLowerCase()+" on "+sqName(s)+" undefended.";
+      }
+      // 3. nothing hangs — it is simply not forcing
+      return "It gives the opponent a free move to untangle.";
+    }
+    var reason;
+    try{ reason=why(); }catch(e){ reason="It lets the opponent off the hook."; }
+
+    /* Bands measured against real tries in these positions: sound moves such as
+       Nc3, Bxf7+ and a3 score 183-233 below the best alternative, while hanging
+       the queen scores 363. The dice compress every value, so the thresholds sit
+       tighter than a plain chess engine's would. */
+    if(mateWasThere){
+      if(gap<260) return {label:"Missed the mate",
+        note:"A perfectly sound move — but there is a forced mate here, and this is not it. "+reason};
+      if(gap<340) return {label:"Missed the mate",
+        note:"There was forced mate here, and this concedes ground as well. "+reason};
+      return {label:"Blunder",
+        note:"Mate was available and this drops material instead. "+reason};
+    }
+    if(gap<80)   return {label:"Almost", note:"A reasonable move, but something is stronger. "+reason};
+    if(gap<260)  return {label:"Inaccuracy", note:"Playable, yet it lets the win slip away. "+reason};
+    if(gap<340)  return {label:"Mistake", note:"That misses the point of the position. "+reason};
+    return {label:"Blunder", note:"That gives material away. "+reason};
+  }catch(e){ return {label:"Not the move", note:"That is not the idea here — look at the position again."}; }
+}
+function loadPuzzle(i){
+  var list=puzzleList();
+  if(!list.length) return;
+  puzzleIdx=Math.max(0, Math.min(list.length-1, i));
+  var P=list[puzzleIdx];
+  puzzleStep=0; puzzleState="opening"; hintSq=-1; puzzleGrade=null;
+  missFrom=-1; missTo=-1;
+  newGame(true);
+  state.board=P.board.slice();
+  state.turn = "b";                      // the opponent moves first
+  state.castling={wK:false,wQ:false,bK:false,bQ:false};
+  state.ep=null;
+  state.snaps=[{board:state.board.slice(), turn:state.turn, graves:{w:[],b:[]}}];
+  state.posCounts={}; state.posCounts[posKey(state)]=1;
+  legalCache=legalMoves(state,"b");
+  busy=true;                             // the player waits for the opening move
+  renderPuzzle(); render(); renderLog();
+  setTimeout(function(){
+    if(!puzzleActive || puzzleState!=="opening") return;
+    var m=matchMove(P.first, "b");
+    if(m){ busy=false; commit(m); }
+    else { busy=false; puzzleState="solving"; renderPuzzle(); render(); }
+  }, 900);
+}
+/* Find the legal move object matching a scripted from/to. */
+function matchMove(spec, color){
+  var ms=legalMoves(state, color);
+  for(var i=0;i<ms.length;i++){
+    if(ms[i].from===spec.from && ms[i].to===spec.to && (!ms[i].promo || ms[i].promo==="q")) return ms[i];
+  }
+  return null;
+}
+function renderPuzzle(){
+  var list=puzzleList(), P=list[puzzleIdx];
+  if(!P) return;
+  var chip=document.getElementById("coachChip");
+  var title=document.getElementById("coachTitle");
+  var text=document.getElementById("coachText");
+  var meta=document.getElementById("coachMeta");
+
+  chip.className = "coachChip " + (puzzleState==="opening" ? "b" : "w");
+  var msg, cls="coachText";
+  if(puzzleState==="opening"){ title.textContent="Black to move";
+    msg="Watch — the opponent plays first."; }
+  else if(puzzleState==="solved"){ title.textContent="Solved";
+    msg=P.theme+". Well found."; cls+=" done"; }
+  else if(puzzleState==="wrong"){
+    title.textContent = puzzleGrade ? puzzleGrade.label : "Not the move";
+    msg = (puzzleGrade ? puzzleGrade.note : "That is not the idea here.")
+        + " Take a look, then press Retry when you want another go.";
+    cls+=" miss"; }
+  else if(puzzleState==="unlucky"){ title.textContent="The dice said no";
+    msg="Right idea — the roll went against you, so the line is dead. "
+      + "Press Retry to set it up again."; cls+=" miss"; }
+  else {
+    title.textContent="White to move";
+    var left=P.solution.length-puzzleStep;
+    msg = (left===P.solution.length)
+      ? ("You can win here. Find the "+P.goal.toLowerCase()+".")
+      : (left+" move"+(left>1?"s":"")+" to go.");
+  }
+  text.className=cls; text.textContent=msg;
+  meta.textContent = P.theme+" · "+P.goal+" · Puzzle "+(puzzleIdx+1)+" of "+list.length;
+
+  document.getElementById("pzHint").disabled = puzzleState!=="solving";
+  /* While the puzzle is halted, Retry is the move the player is meant to make,
+     so it carries the primary styling instead of Next/Skip. */
+  var halted = (puzzleState==="wrong" || puzzleState==="unlucky");
+  var retry=document.getElementById("pzRetry"), next=document.getElementById("pzNext");
+  retry.className = "btn " + (halted ? "primary" : "rvGhost");
+  next.className  = "btn " + (halted ? "rvGhost" : "primary");
+  next.textContent = puzzleState==="solved" ? "Next" : "Skip";
+}
+/* Stop the puzzle on a rejected move. The position stays exactly as the player
+   left it, the two squares are marked red, and the board is frozen so nothing
+   can be played on from a dead line. It does NOT reset — the player restarts
+   with Retry when they have finished looking at it. */
+function haltPuzzle(stateName, from, to){
+  puzzleState=stateName; hintSq=-1;
+  missFrom=(from==null?-1:from); missTo=(to==null?-1:to);
+  selected=null;                  // puzzleFrozen() now freezes every square
+  renderPuzzle(); render();
+  /* "unlucky" already made its noise during the battle — don't double up. */
+  if(stateName==="wrong") sndRepel();
+}
+/* Judge the player's move against the solution, then play the scripted reply. */
+function checkPuzzle(h){
+  if(!puzzleActive) return;
+  var P=currentPuzzle(); if(!P) return;
+
+  if(puzzleState==="opening"){                 // that was the opponent's opening move
+    puzzleState="solving"; hintSq=-1;
+    renderPuzzle(); render();
+    return;
+  }
+  if(puzzleState!=="solving") return;
+  if(h.color!=="w"){
+    /* The opponent's scripted answer can itself be repelled by the dice, which
+       leaves a position the rest of the line no longer fits. Nothing to do but
+       start over — but the player decides when, not a timer. */
+    if(h.capture && !h.success){
+      haltPuzzle("unlucky", h.from, h.to);
+    }
+    return;
+  }
+
+  var want=P.solution[puzzleStep];
+  if(!want || h.from!==want.from || h.to!==want.to){
+    /* Real puzzle trainers accept any move that achieves the goal, and tell you
+       HOW wrong a wrong one was rather than just rejecting it. */
+    if(isMateGoal(P) && puzzleStep===P.solution.length-1 &&
+       legalMoves(state, state.turn).length===0 && inCheck(state.board, state.turn)){
+      puzzleStep++; hintSq=-1; puzzleState="solved";
+      renderPuzzle(); render(); sndEnd(true);
+      return;
+    }
+    puzzleGrade = gradeMove(h, want);
+    haltPuzzle("wrong", h.from, h.to);
+    return;
+  }
+  /* Right move, wrong roll. The dice are live in puzzles too, so a correct
+     idea can still be repelled — which is the whole point of this game. */
+  if(h.capture && !h.success){
+    haltPuzzle("unlucky", h.from, h.to);
+    return;
+  }
+  puzzleStep++; hintSq=-1;
+  if(puzzleStep>=P.solution.length){
+    puzzleState="solved";
+    renderPuzzle(); render();
+    sndEnd(true);
+    return;
+  }
+  // opponent's scripted answer
+  var reply=P.replies[puzzleStep-1];
+  renderPuzzle(); render();
+  if(reply){
+    busy=true; render();
+    setTimeout(function(){
+      if(!puzzleActive) return;
+      var m=matchMove(reply, state.turn);
+      busy=false;
+      if(m) commit(m); else { renderPuzzle(); render(); }
+    }, 800);
+  }
+}
+
+/* Called after every ply while training, to see if the lesson's task is met. */
+function checkLesson(h){
+  if(puzzleActive){ checkPuzzle(h); return; }
+  if(!training || lessonDone) return;
+  var L=LESSONS[lessonIdx];
+  var ok=false;
+  try{ ok = L.goal(h); }catch(e){ ok=false; }
+  if(ok){ lessonDone=true; renderLesson(); }
+}
+
+/* ================= start-screen showpiece =================
+   A knight stands over a pawn and the dice keep deciding it. Same dice, same
+   odds and same outcomes as the real game, so the start screen states the rule
+   by demonstrating it rather than describing it. */
+function buildMenuArt(){
+  // chess piece on each mode tile
+  document.querySelectorAll(".mIcon[data-piece]").forEach(function(el){
+    // piece colour follows the square it stands on, so it always reads clearly
+    var side = el.dataset.sq==="light" ? "b" : "w";
+    var html=pieceSVG(side, el.dataset.piece);
+    if(el.dataset.piece2) html=pieceSVG(opp(side), el.dataset.piece2)+html;
+    el.innerHTML=html;
+  });
+  // a flat die face for the training tile
+  var td=document.getElementById("trainDie");
+  if(td){
+    td.classList.add("die");
+    var lit=PIPS[5], h="";
+    for(var c=1;c<=9;c++) h+="<span>"+(lit.indexOf(c)>=0?"<i></i>":"")+"</span>";
+    td.innerHTML=h;
+  }
+}
+
+/* The 3×3 board keeps its nine squares; only the two pieces on it change.
+   Attacker sits in the middle, defender directly above it. */
+/* Each scene names the squares it uses, because the capture has to be a move
+   the piece can actually make. Squares are indices on the 3x3:
+       0 1 2
+       3 4 5
+       6 7 8
+   A knight cannot reach a square one step in front of it, so it needs an
+   L-shape; a pawn captures diagonally, never straight ahead. Verified against
+   the real move generator (see __G.checkHeroScenes). */
+var HERO_SCENES=[
+  {atk:["w","n"], def:["b","p"], from:7, to:2},   // knight: L-shape
+  {atk:["b","r"], def:["w","b"], from:1, to:7},   // rook: down the file
+  {atk:["w","q"], def:["b","r"], from:6, to:2},   // queen: long diagonal, three dice
+  {atk:["w","p"], def:["b","n"], from:7, to:5},   // pawn: diagonal capture only
+  {atk:["b","b"], def:["w","n"], from:0, to:8},   // bishop: corner to corner
+  {atk:["w","r"], def:["b","b"], from:3, to:5}    // rook: across the rank
+];
+var heroTimer=null, heroScene=0, heroForceWin=true, heroSpins=0;
+
+function heroSquares(scene){
+  var hb=document.getElementById("heroBoard"), html="";
+  for(var i=0;i<9;i++){
+    var r=Math.floor(i/3), c=i%3, dark=(r+c)&1;
+    var pc = (i===scene.from) ? scene.atk : (i===scene.to ? scene.def : null);
+    html+='<div class="hsq'+(i===scene.to?" target":"")+
+          '" style="background:var(--board-'+(dark?"dark":"light")+')">'+
+          (pc?pieceSVG(pc[0],pc[1]):"")+'</div>';
+  }
+  hb.innerHTML=html;
+}
+
+function heroBuildDice(host, n){
+  host.innerHTML="";
+  var boxes=[];
+  for(var i=0;i<n;i++){
+    var w=document.createElement("div"); w.className="dieWrap";
+    var b=document.createElement("div"); b.className="dieBox";
+    var sh=document.createElement("div"); sh.className="dieShadow";
+    buildDie(b);
+    b.style.transform="rotateX(-24deg) rotateY(18deg)";
+    w.appendChild(b); w.appendChild(sh); host.appendChild(w);
+    boxes.push(b);
+  }
+  return boxes;
+}
+
+function startHeroLoop(){
+  if(!document.getElementById("heroBoard")) return;
+  clearInterval(heroTimer);
+  runHeroScene();
+  heroTimer=setInterval(runHeroScene, reduced ? 1800 : 3000);
+}
+function stopHeroLoop(){ clearInterval(heroTimer); heroTimer=null; }
+
+function runHeroScene(){
+  if(document.getElementById("menu").hidden) return;    // paused while playing
+  var V=document.getElementById("heroVerdict");
+  var scene=HERO_SCENES[heroScene % HERO_SCENES.length];
+  heroScene++;
+  heroSpins++;
+
+  heroSquares(scene);
+  var nA=atkDice(scene.atk[1]), nD=defDice(scene.def[1]);
+  document.querySelector(".heroRoll").dataset.atk=nA;   // sizes a three-die row
+  var boxesA=heroBuildDice(document.getElementById("heroAtkDice"), nA);
+  var boxesD=heroBuildDice(document.getElementById("heroDefDice"), nD);
+  V.textContent=" "; V.className="heroVerdict";
+
+  /* Alternate the outcome so both halves of the rule get shown, then roll real
+     dice until they actually produce it — the faces you see are always a valid
+     roll for the result, never a fixed picture. */
+  heroForceWin = !heroForceWin;
+  var va, vd, a, d, guard=0;
+  do{
+    va=[]; vd=[];
+    for(var i=0;i<nA;i++) va.push(d6());
+    for(var j=0;j<nD;j++) vd.push(d6());
+    a=Math.max.apply(null,va); d=Math.max.apply(null,vd);
+  } while(((a===d) || ((a>d)!==heroForceWin)) && guard++<200);
+
+  boxesA.forEach(function(b,i){ rollDie(b, va[i], reduced?0:1+heroSpins+i); });
+  boxesD.forEach(function(b,i){ rollDie(b, vd[i], reduced?0:2+heroSpins+i); });
+
+  var settle = reduced ? 50 : 800;
+  setTimeout(function(){
+    if(document.getElementById("menu").hidden) return;
+    var win=a>d;
+    var atkName=NAME[scene.atk[1]].toLowerCase(), defName=NAME[scene.def[1]].toLowerCase();
+    V.textContent = win ? ("Capture — the "+defName+" falls")
+                        : ("Repelled — the "+atkName+" is lost");
+    V.className = "heroVerdict "+(win?"win":"lose");
+
+    // play the result out on the little board
+    var sqs=document.querySelectorAll("#heroBoard .hsq");
+    var defSq=sqs[scene.to], atkSq=sqs[scene.from];
+    defSq.classList.add("resolved");
+    var moving=atkSq.querySelector("svg"), dying=defSq.querySelector("svg");
+    if(win){
+      if(dying) dying.classList.add("falls");
+      // travel the real distance of the move, not a fixed step
+      var dCol=(scene.to%3)-(scene.from%3);
+      var dRow=Math.floor(scene.to/3)-Math.floor(scene.from/3);
+      if(moving){
+        moving.style.zIndex="2";
+        moving.style.transform="translate("+(dCol*100)+"%,"+(dRow*100)+"%)";
+      }
+    } else {
+      if(moving) moving.classList.add("falls");                    // the attacker dies
+    }
+  }, settle);
+}
+
+/* ================= screens ================= */
+function showMenu(){
+  stopTraining();
+  reviewIdx=null;
+  document.getElementById("reviewBar").hidden=true;
+  document.getElementById("gameover").classList.remove("show");
+  document.getElementById("menu").hidden=false;
+  document.getElementById("gameView").hidden=true;
+  document.getElementById("tagline").hidden=false;
+  document.getElementById("backBtn").hidden=true;
+  document.getElementById("gearBtn").hidden=true;   // nothing to configure on the menu
+  document.getElementById("settings").hidden=true;
+  startHeroLoop();
+}
+function showGame(){
+  stopHeroLoop();
+  document.getElementById("tagline").hidden=true;   /* redundant once playing */
+  document.getElementById("menu").hidden=true;
+  document.getElementById("gameView").hidden=false;
+  document.getElementById("gearBtn").hidden=false;
+  document.getElementById("backBtn").hidden=false;
+}
+function startMode(mode, level){
+  showGame();
+  if(mode==="training"){ startTraining(); return; }
+  stopTraining();
+  if(mode==="bot"){ botOn=true; botLevel=level||"medium"; botSide="b"; }
+  else { botOn=false; }
+  // keep the Table panel in step with the choice made on the menu
+  var bt=document.getElementById("botToggle");
+  bt.checked=botOn;
+  document.getElementById("botOpts").hidden=!botOn;
+  document.getElementById("botLevel").value=botLevel;
+  document.getElementById("botSide").value=botSide;
+  savePref("gambit.bot", botOn?"1":"0");
+  savePref("gambit.botLevel", botLevel);
+  newGame();
+}
+
+/* ================= game lifecycle ================= */
+function endGame(result, why){
+  gameOver=true;
+  selected=null;
+  endDrag();
+  render();
+  /* In a puzzle the mate IS the solution — the panel telling you the game is
+     over would just cover the panel telling you that you solved it. */
+  if(puzzleActive) return;
+  sndEnd(result==="Checkmate");
+  document.getElementById("goResult").textContent=result;
+  document.getElementById("goWhy").textContent=why;
+  document.getElementById("gameover").classList.add("show");
+}
+
+function newGame(keepTraining){
+  if(training && !keepTraining) stopTraining();
+  state=freshState();
+  selected=null; gameOver=false; busy=false; thinking=false; lastMove=null;
+  lastBattle=null; reviewIdx=null;
+  document.getElementById("reviewBar").hidden=true;
+  legalCache=legalMoves(state, state.turn);
+  state.posCounts[posKey(state)]=1;
+  document.getElementById("gameover").classList.remove("show");
+  render(); renderLog();
+  maybeBot();
+}
+
+/* battle-log side card: reflect the most recent capture attempt */
+var _origFinalize = finalize;
+
+/* ================= wire up ================= */
+document.getElementById("newGameBtn").addEventListener("click", newGame);
+document.getElementById("goNew").addEventListener("click", newGame);
+
+/* Clicking a move jumps to it — and opens the review if the game is over. */
+document.getElementById("log").addEventListener("click", function(e){
+  var row=e.target.closest ? e.target.closest(".ply") : null;
+  if(!row) return;
+  var ply=parseInt(row.dataset.ply,10);
+  if(isNaN(ply)) return;
+  if(reviewing()) reviewGo(ply);
+  else if(gameOver) enterReview(ply);
+});
+
+/* ---- start screen ---- */
+document.querySelectorAll(".mode").forEach(function(tile){
+  tile.addEventListener("click", function(){
+    audio();                       // menu tap doubles as the audio unlock gesture
+    startMode(this.dataset.mode, this.dataset.level);
+  });
+});
+document.getElementById("menuBtn").addEventListener("click", showMenu);
+document.getElementById("backBtn").addEventListener("click", showMenu);
+
+/* ---- training ---- */
+document.getElementById("tPrev").addEventListener("click", function(){ loadLesson(lessonIdx-1); });
+document.getElementById("tNext").addEventListener("click", function(){
+  if(lessonIdx===LESSONS.length-1){ showMenu(); return; }
+  loadLesson(lessonIdx+1);
+});
+
+function setTrainTab(tab){
+  trainTab=tab;
+  var rules=tab==="rules";
+  document.getElementById("tabRules").classList.toggle("on", rules);
+  document.getElementById("tabPuzzles").classList.toggle("on", !rules);
+  document.getElementById("rulesActions").hidden=!rules;
+  document.getElementById("puzzleActionsRow").hidden=rules;
+  document.getElementById("pzDiffRow").hidden=rules;      // difficulty is puzzles-only
+  document.getElementById("pzNote").hidden=rules;
+  puzzleActive=!rules;
+  hintSq=-1;
+  if(rules){ loadLesson(lessonIdx); }
+  else { loadPuzzle(0); }
+}
+document.getElementById("tabRules").addEventListener("click", function(){ setTrainTab("rules"); });
+document.getElementById("tabPuzzles").addEventListener("click", function(){ setTrainTab("puzzles"); });
+document.querySelectorAll(".pzLvl").forEach(function(b){
+  b.addEventListener("click", function(){
+    document.querySelectorAll(".pzLvl").forEach(function(x){ x.classList.remove("on"); });
+    this.classList.add("on");
+    puzzleLvl=this.dataset.lvl;
+    loadPuzzle(0);
+  });
+});
+document.getElementById("pzHint").addEventListener("click", function(){
+  var P=currentPuzzle();
+  if(!P || puzzleState!=="solving") return;
+  var want=P.solution[puzzleStep];
+  if(!want) return;
+  hintSq=want.from;                       // light up the piece that must move
+  document.getElementById("coachText").textContent=P.hint;
+  render();
+});
+document.getElementById("pzRetry").addEventListener("click", function(){ loadPuzzle(puzzleIdx); });
+document.getElementById("pzNext").addEventListener("click", function(){
+  var list=puzzleList();
+  loadPuzzle((puzzleIdx+1) % list.length);
+});
+
+document.getElementById("flipBtn").addEventListener("click", function(){
+  flipped=!flipped;
+  render();
+});
+document.getElementById("reviewBtn").addEventListener("click", function(){
+  if(reviewing()) exitReview(); else enterReview(null);
+});
+
+/* ---- review controls ---- */
+document.getElementById("goReview").addEventListener("click", function(){ enterReview(null); });
+document.getElementById("rvExit").addEventListener("click", exitReview);
+document.getElementById("rvNew").addEventListener("click", newGame);
+document.getElementById("rvFirst").addEventListener("click", function(){ reviewGo(0); });
+document.getElementById("rvPrev").addEventListener("click", function(){ reviewGo(reviewIdx-1); });
+document.getElementById("rvNext").addEventListener("click", function(){ reviewGo(reviewIdx+1); });
+document.getElementById("rvLast").addEventListener("click", function(){ reviewGo(state.history.length); });
+document.addEventListener("keydown", function(e){
+  if(!reviewing()) return;
+  if(e.key==="ArrowLeft"){ e.preventDefault(); reviewGo(reviewIdx-1); }
+  else if(e.key==="ArrowRight"){ e.preventDefault(); reviewGo(reviewIdx+1); }
+  else if(e.key==="Home"){ e.preventDefault(); reviewGo(0); }
+  else if(e.key==="End"){ e.preventDefault(); reviewGo(state.history.length); }
+  else if(e.key==="Escape"){ e.preventDefault(); exitReview(); }
+});
+
+/* ---- computer opponent controls ---- */
+var botToggle=document.getElementById("botToggle");
+var botOpts=document.getElementById("botOpts");
+var botLevelSel=document.getElementById("botLevel");
+var botSideSel=document.getElementById("botSide");
+
+function loadPref(k,d){ try{ var v=localStorage.getItem(k); return v===null?d:v; }catch(e){ return d; } }
+function savePref(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+
+botOn    = loadPref("gambit.bot","0")==="1";
+botLevel = loadPref("gambit.botLevel","medium");
+botSide  = loadPref("gambit.botSide","b");
+botToggle.checked=botOn;
+botLevelSel.value=botLevel;
+botSideSel.value=botSide;
+botOpts.hidden=!botOn;
+
+botToggle.addEventListener("change", function(){
+  botOn=this.checked; botOpts.hidden=!botOn;
+  savePref("gambit.bot", botOn?"1":"0");
+  render(); maybeBot();
+});
+botLevelSel.addEventListener("change", function(){
+  botLevel=this.value; savePref("gambit.botLevel", botLevel);
+});
+botSideSel.addEventListener("change", function(){
+  botSide=this.value; savePref("gambit.botSide", botSide);
+  render(); maybeBot();
+});
+
+var rotToggle=document.getElementById("rotateToggle");
+try{ rotate = localStorage.getItem("gambit.rotate")==="1"; }catch(e){ rotate=false; }
+rotToggle.checked=rotate;
+rotToggle.addEventListener("change", function(){
+  rotate=this.checked;
+  try{ localStorage.setItem("gambit.rotate", rotate?"1":"0"); }catch(e){}
+  render();
+});
+
+/* ---- settings sheet ---- */
+function applyTheme(t){
+  if(t==="light"||t==="dark"){ document.documentElement.dataset.theme=t; }
+  else { delete document.documentElement.dataset.theme; }
+  var dark = t==="dark" || (!t && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  document.getElementById("themeToggle").checked = dark;
+}
+var savedTheme=null;
+try{ savedTheme=localStorage.getItem("gambit.theme"); }catch(e){}
+applyTheme(savedTheme);
+document.getElementById("themeToggle").addEventListener("change", function(){
+  var next=this.checked ? "dark" : "light";
+  applyTheme(next);
+  try{ localStorage.setItem("gambit.theme", next); }catch(e){}
+});
+document.getElementById("rulesBody").appendChild(
+  document.getElementById("rulesText").content.cloneNode(true));
+
+var settingsEl=document.getElementById("settings");
+function openSettings(){
+  /* Rotating the board makes no sense in training: it is always you as White
+     against the computer, and a puzzle would flip mid-solve. */
+  document.getElementById("rotateRow").hidden = training;
+  document.getElementById("opponentBox").hidden = training;
+  document.getElementById("trainSettings").hidden = !training;
+  document.getElementById("setGroupGame").hidden = training;
+  settingsEl.hidden=false;
+}
+function closeSettings(){ settingsEl.hidden=true; }
+document.getElementById("gearBtn").addEventListener("click", openSettings);
+document.getElementById("settingsClose").addEventListener("click", closeSettings);
+settingsEl.addEventListener("click", function(e){ if(e.target===settingsEl) closeSettings(); });
+document.addEventListener("keydown", function(e){
+  if(e.key==="Escape" && !settingsEl.hidden){ e.preventDefault(); closeSettings(); }
+});
+
+/* ---- opening animation ---- */
+(function splashIntro(){
+  var el=document.getElementById("splash");
+  if(!el) return;
+  var closed=false;
+  function close(){
+    if(closed) return; closed=true;
+    el.classList.add("done");
+    setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 600);
+  }
+  document.getElementById("splashSkip").addEventListener("click", close);
+  el.addEventListener("click", close);
+
+  // board tiles in, square by square, on a diagonal sweep
+  var b=document.getElementById("splashBoard"), html="";
+  for(var r=0;r<8;r++) for(var c=0;c<8;c++){
+    var dark=(r+c)&1;
+    html+='<i style="background:var(--board-'+(dark?"dark":"light")+');'+
+          'animation-delay:'+((r+c)*26)+'ms"></i>';
+  }
+  b.innerHTML=html;
+
+  // the full 32-piece starting position drops onto it once the tiles have
+  // landed. Rows 0-1 are Black, rows 6-7 White; rows 2-5 are empty spacers.
+  // Both back ranks land first, then both pawn ranks in front of them.
+  var back=["r","n","b","q","k","b","n","r"], cells="";
+  for(var rr=0;rr<8;rr++){
+    var isBack = rr===0||rr===7, isPawn = rr===1||rr===6;
+    var col = (rr<=1) ? "b" : "w";
+    var rankWave = isBack ? 0 : 1;
+    for(var cc=0;cc<8;cc++){
+      if(isBack || isPawn){
+        var ty = isBack ? back[cc] : "p";
+        var delay = 430 + rankWave*150 + cc*22;
+        cells += pieceSVG(col, ty).replace("<svg ",
+          '<svg style="animation-delay:'+delay+'ms" ');
+      } else {
+        cells += "<i></i>";
+      }
+    }
+  }
+  document.getElementById("splashRank").innerHTML=cells;
+
+  // three dice, thrown onto the board from off its lower-right edge: each one
+  // flies in, skips, bounces and settles on a random face at a slight angle.
+  var dice=document.getElementById("splashDice");
+  var spots=[[3,3],[4,5],[5,3]];          // [row,col] — a loose scatter near the middle
+  var throws=[
+    {fromX:"128px", fromY:"78px",  rz:"-7deg", thr:".8s"},
+    {fromX:"104px", fromY:"116px", rz:"5deg",  thr:".9s"},
+    {fromX:"150px", fromY:"96px",  rz:"-3deg", thr:".84s"}
+  ];
+  var diceBase=970;
+  spots.forEach(function(sp,i){
+    var wrap=document.createElement("div"); wrap.className="splashDie";
+    wrap.style.left=((sp[1]+0.5)/8*100)+"%";
+    wrap.style.top =((sp[0]+0.5)/8*100)+"%";
+    var t=throws[i];
+    wrap.style.setProperty("--fromX", t.fromX);
+    wrap.style.setProperty("--fromY", t.fromY);
+    wrap.style.setProperty("--rz", t.rz);
+    wrap.style.setProperty("--thr", t.thr);
+    var box=document.createElement("div"); box.className="dieBox";
+    var sh =document.createElement("div"); sh.className="dieShadow";
+    buildDie(box);
+    wrap.appendChild(sh); wrap.appendChild(box);
+    var d=diceBase+i*90;                  // thrown in a quick handful, not one at a time
+    wrap.style.animationDelay=d+"ms";
+    sh.style.animationDelay=d+"ms";
+    dice.appendChild(wrap);
+    var v=1+Math.floor(Math.random()*6);
+    if(reduced){ box.style.transition="none"; rollDie(box, v, 0); }
+    else { setTimeout(function(){ rollDie(box, v, 6+i*2); }, d+30); }
+  });
+
+  if(reduced){ setTimeout(close, 650); return; }   // show it, just don't animate
+  el.classList.add("animate");
+  setTimeout(close, 2950);
+})();
+
+buildBoard();
+buildMenuArt();
+newGame();
+showMenu();          // the board waits behind the start screen
+
+/* No service worker here, on purpose. This is an archived snapshot: it must
+   always serve itself, never a newer build out of a shared cache. The live
+   game at ../../ registers the worker as normal. */
+
+window.__G={freshState:freshState,legalMoves:legalMoves,applyMove:applyMove,opp:opp,
+            inCheck:inCheck,chooseBotMove:chooseBotMove,evaluate:evaluate,LEVELS:LEVELS,
+            getNodes:function(){return nodes;},
+            buildDie:buildDie,rollDie:rollDie,FACE_ROT:FACE_ROT,PIPS:PIPS,
+            winChance:winChance,captureOdds:captureOdds,atkDice:atkDice,defDice:defDice,
+            describePly:describePly,enterReview:enterReview,getState:function(){return state;},
+            runHeroScene:function(){return runHeroScene();},reducedMotion:function(){return reduced;},
+            PUZZLES:PUZZLES,sqi:sqi,HERO_SCENES:HERO_SCENES,
+            lastGrade:function(){return lastGrade;},
+            /* Puzzle plumbing, for driving the trainer without a pointer. */
+            startTraining:startTraining,setTrainTab:setTrainTab,
+            loadPuzzle:loadPuzzle,currentPuzzle:currentPuzzle,commit:commit,
+            puzzleInfo:function(){
+              return {state:puzzleState, step:puzzleStep, idx:puzzleIdx,
+                      missFrom:missFrom, missTo:missTo, busy:busy, hintSq:hintSq,
+                      grade:puzzleGrade};
+            },
+            /* Maps the 3x3 onto a real board and asks the move generator whether
+               each menu capture is a move that piece could actually make. */
+            checkHeroScenes:function(){
+              return HERO_SCENES.map(function(s){
+                var to8=function(i){ return (2+Math.floor(i/3))*8 + (2+(i%3)); };
+                var b=[]; for(var i=0;i<64;i++) b.push("");
+                b[to8(s.from)]=s.atk[0]+s.atk[1];
+                b[to8(s.to)]=s.def[0]+s.def[1];
+                b[0]="bk"; b[63]="wk";           // kings parked out of the way
+                var st={board:b,turn:s.atk[0],castling:{wK:false,wQ:false,bK:false,bQ:false},
+                        ep:null,halfmove:0};
+                var legal=legalMoves(st,s.atk[0]).some(function(m){
+                  return m.from===to8(s.from) && m.to===to8(s.to) && m.capture; });
+                return {piece:s.atk[1], from:s.from, to:s.to, legalCapture:legal};
+              });
+            },
+            audioInfo:function(){return {ctx:actx,master:master,ready:audioReady,
+                                         state:actx?actx.state:"none"};},
+            snd:{move:sndMove,capture:sndCapture,repel:sndRepel,die:sndDie,
+                 check:sndCheck,end:sndEnd}};
+
+})();
+</script>
+</body>
+</html>
