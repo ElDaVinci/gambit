@@ -422,18 +422,21 @@ body{
    No badge and no bubble: the number sits on the piece itself in the opposite
    colour, so it reads as part of the piece.
 
-   Two things make a small number legible here. It sits at 74% down the square,
-   centred on the wide flat base every silhouette shares (which spans roughly
-   68–81% of the square) rather than the narrow body — a digit over the body
-   spills past the outline and turns to mush. And it carries a thin halo in the
-   piece's OWN fill colour, clearing a little space wherever the digit meets the
-   silhouette's stroke.
+   Dead centre of the PIECE, not of the square. Measured from each silhouette's
+   real ink box, the centres land at: king 45.6%, pawn 45.7%, bishop 47.2%,
+   knight 47.8%, queen 51.3%, rook 54.4% of the square — so 49% sits within a
+   couple of pixels of every piece's true middle. (74% looked "below the piece":
+   the ink bottoms out at 72–81%, so that was down on the base.)
+
+   A thin halo in the piece's OWN fill colour clears a little space wherever the
+   digit meets the silhouette's stroke, which is what keeps a small number
+   readable over the busier middle of the piece.
 
    Sized in vw with a px floor and ceiling, so it MUST be checked at a real
    viewport width: at 0vw a bare min() collapses to font-size:0 and the number
    silently disappears — which is exactly what hid it during testing. */
 .count{
-  position:absolute;left:0;right:0;top:74%;transform:translateY(-50%);
+  position:absolute;left:0;right:0;top:49%;transform:translateY(-50%);
   z-index:3;pointer-events:none;text-align:center;
   font-family:"IBM Plex Sans",system-ui,sans-serif;font-weight:700;
   font-size:clamp(10px,2.7vw,14px);line-height:1;
