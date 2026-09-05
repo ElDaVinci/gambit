@@ -675,6 +675,7 @@ details.rules .body li{margin:3px 0}
   font-size:12.5px;letter-spacing:.02em}
 .btn.allIn:hover{background:color-mix(in srgb,var(--repel) 12%,transparent);
   border-color:var(--repel)}
+.btn.ffBtn{width:100%;margin-top:10px;font-size:12.5px}
 /* Live garrisons beside each piece in the header, so the count you are spending
    is next to the piece spending it. */
 .versus .side{display:inline-flex;align-items:center;gap:7px}
@@ -737,6 +738,14 @@ details.rules .body li{margin:3px 0}
 .dieRow[data-n="3"] .dieBox{width:46px;height:46px;--half:23px}
 .dieRow[data-n="3"] .dieShadow{top:50px;width:38px}
 .dieSide.winner .dieRow[data-n="3"] .dieWrap:not(.ignored) .dieShadow{width:48px;height:9px}
+/* The King rolls four. In one row that is wider than the panel and the outer
+   dice hang off both edges, so four stack as a 2x2 block instead. */
+.dieRow[data-n="4"]{display:grid;grid-template-columns:repeat(2,auto);
+  gap:14px 10px;justify-items:center;align-items:start}
+.dieRow[data-n="4"] .dieWrap,
+.dieRow[data-n="4"] .dieBox{width:40px;height:40px;--half:20px}
+.dieRow[data-n="4"] .dieShadow{top:43px;width:33px;height:7px}
+.dieSide.winner .dieRow[data-n="4"] .dieWrap:not(.ignored) .dieShadow{width:42px;height:8px}
 /* The perspective must sit on the cube's DIRECT parent: anything in between
    flattens the 3D context and collapses a die rotated 90deg (values 2 and 5). */
 .dieWrap{position:relative;width:64px;height:64px;
@@ -1095,6 +1104,8 @@ details.rules .body li{margin:3px 0}
       </div>
       <button class="btn allIn" id="battleAllIn" type="button">All in &mdash; fight to the finish</button>
     </div>
+    <!-- Shown only while the computer is resolving its own assault. -->
+    <button class="btn rvGhost ffBtn" id="battleFF" type="button" style="display:none">Skip to the end &#9193;</button>
     <button class="btn primary go" id="battleGo" type="button" style="display:none">Continue</button>
   </div>
 </div>
@@ -1727,6 +1738,17 @@ function battle(atkType, atkColor, defType, defColor, atSq, atkSouls, defSouls, 
        no more prompts, and the dice roll faster so a 15-duel fight is watchable
        rather than a wait. */
     var allIn=false;
+    /* The computer's own assaults run at the quick pace from the start — you
+       are watching a result, not making a decision — and "Skip to the end"
+       drops the animation entirely for the rest of the engagement. */
+    var quick = !!autoPress;
+    var ff=false;
+    var ffBtn=document.getElementById("battleFF");
+    ffBtn.style.display = autoPress ? "block" : "none";
+    function onFF(){ ff=true; ffBtn.style.display="none"; }
+    ffBtn.addEventListener("click", onFF);
+    function hurried(){ return ff || allIn || quick; }
+
     var rounds=[], turnCount=0;
     showCounts(null);
     throwDice();
@@ -1762,12 +1784,12 @@ function battle(atkType, atkColor, defType, defColor, atSq, atkSouls, defSouls, 
       rollSide(boxesA, va, 2);
       rollSide(boxesD, vd, 3);
 
-      if(reduced){ setTimeout(function(){ markKept(boxesA,va); markKept(boxesD,vd); land(a,bd); }, 60); return; }
-      /* All in can run a dozen duels, so the roll is cut short once committed —
+      if(reduced || ff){ setTimeout(function(){ markKept(boxesA,va); markKept(boxesD,vd); land(a,bd); }, ff?0:60); return; }
+      /* A committed engagement can run a dozen duels, so the roll is cut short —
          still visibly a roll, but not a 1.2s wait fifteen times over. */
-      var settleMs = allIn ? 420 : 1200;
+      var settleMs = hurried() ? 420 : 1200;
       sndDie(0.02); sndDie(0.10);       // leaving the hand
-      if(!allIn){ sndDie(0.95); sndDie(1.05); }   // clattering to rest
+      if(!hurried()){ sndDie(0.95); sndDie(1.05); }   // clattering to rest
       setTimeout(function(){
         wrapA.classList.add("settle"); wrapD.classList.add("settle");
         markKept(boxesA,va); markKept(boxesD,vd);
@@ -1779,7 +1801,7 @@ function battle(atkType, atkColor, defType, defColor, atSq, atkSouls, defSouls, 
       if(a===bd){
         rollLog.textContent = "Tie on "+a+" — rolling again";
         tone({f0:300,dur:0.10,type:"square",gain:0.07});
-        setTimeout(throwDice, reduced?200:(allIn?260:850));
+        setTimeout(throwDice, ff?0:(reduced?200:(hurried()?260:850)));
         return;
       }
       var win=a>bd;
@@ -1788,7 +1810,9 @@ function battle(atkType, atkColor, defType, defColor, atSq, atkSouls, defSouls, 
       lastBattle={a:a, d:bd, rounds:rounds.slice()};   // kept for the game review
       (win?wrapA:wrapD).classList.add("winner");
       document.getElementById("tallies").textContent = "Attacker "+a+"  ·  Defender "+bd;
-      rollLog.textContent = rounds.length>1 ? ("Rolls: "+rounds.join("  ·  ")) : "";
+      /* The per-duel roll history was noise — the current roll and the two
+         garrison counts say everything. Still collected for the game review. */
+      rollLog.textContent = "";
 
       /* Play the duel the dice just decided: both soldiers swing, the loser
          falls. One soldier dies per duel — a unit only falls with its last. */
@@ -1813,7 +1837,7 @@ function battle(atkType, atkColor, defType, defColor, atSq, atkSouls, defSouls, 
         (over ? (defFell?sndCapture:sndRepel) : sndRepel)();
         if(over) showGo(); else showChoice();
       };
-      if(reduced) showResult(); else setTimeout(showResult, allIn?220:420);
+      if(reduced||ff) showResult(); else setTimeout(showResult, hurried()?220:420);
 
       /* The engagement continues only while the attacker wants it to. */
       function showChoice(){
@@ -1823,14 +1847,14 @@ function battle(atkType, atkColor, defType, defColor, atSq, atkSouls, defSouls, 
         var allInBtn=document.getElementById("battleAllIn");
         /* Committed to the finish: no more prompts, just keep going until one
            garrison is empty. */
-        if(allIn){ setTimeout(nextDuel, reduced?80:300); return; }
+        if(allIn){ setTimeout(nextDuel, ff?0:(reduced?80:300)); return; }
         /* The computer decides for itself, but the duels still play out on
            screen so the player can watch the assault. */
         if(autoPress){
           if(autoPress(atkType, defType, atkLeft, defLeft)){
-            setTimeout(nextDuel, reduced?120:900);
+            setTimeout(nextDuel, ff?0:(reduced?120:340));
           } else {
-            setTimeout(showGo, reduced?60:500);
+            setTimeout(showGo, ff?0:(reduced?60:400));
           }
           return;
         }
@@ -1859,6 +1883,7 @@ function battle(atkType, atkColor, defType, defColor, atSq, atkSouls, defSouls, 
 
       function showGo(){
         var go=document.getElementById("battleGo");
+        ffBtn.style.display="none";        // nothing left to skip
         go.style.display="block";
         /* preventScroll matters: on a phone the panel can be taller than the
            viewport, and a plain focus() scrolls the button into view — which
@@ -1894,6 +1919,8 @@ function battle(atkType, atkColor, defType, defColor, atSq, atkSouls, defSouls, 
     var settled=false;
     function done(){
       if(settled) return; settled=true;
+      ffBtn.style.display="none";
+      ffBtn.removeEventListener("click", onFF);
       ov.classList.remove("show");
       resolve({atkLost:atkLost, defLost:defLost, duels:duels,
                outcome: defLeft<=0 ? "captured" : (atkLeft<=0 ? "attackerDestroyed" : "stopped")});
@@ -2631,6 +2658,7 @@ function choosePromo(cb){
   document.getElementById("duel").style.display="none";
   document.getElementById("garrisonLine").style.display="none";
   document.getElementById("engageBtns").style.display="none";
+  document.getElementById("battleFF").style.display="none";
   document.getElementById("tallies").textContent="";
   document.getElementById("verdict").textContent="";
   document.getElementById("verdictSub").textContent="";

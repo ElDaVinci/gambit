@@ -37,8 +37,16 @@ Attacking an enemy piece opens an **engagement**, fought one duel at a time:
    one turn.
 
 Both running garrisons are shown beside the two pieces at the top of the duel panel, so
-the count you are spending sits next to the piece spending it. All in also shortens the
-dice roll, since a fifteen-duel fight at full speed is a wait rather than a spectacle.
+the count you are spending sits next to the piece spending it.
+
+**Pacing.** A committed engagement shortens the dice roll (420 ms instead of 1200 ms),
+because a fifteen-duel fight at full speed is a wait rather than a spectacle. The
+computer's own assaults run at that quick pace from the start — you are watching a
+result, not making a decision — and carry a **Skip to the end** button that drops the
+animation entirely for the rest of the engagement.
+
+**The King rolls four dice**, which in a single row is wider than the panel and hangs off
+both edges. Four dice stack as a 2×2 block instead.
 
 The engagement ends when the attacker breaks off, or when a garrison is emptied. A unit is
 destroyed only when its **last** soldier falls; at that moment the attacker advances onto
