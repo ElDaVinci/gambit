@@ -718,7 +718,11 @@ details.rules .body li{margin:3px 0}
   100%{transform:translateX(-50%) scaleX(1);opacity:.85}
 }
 .face{
-  position:absolute;inset:0;border-radius:11px;
+  /* Radius is a PERCENTAGE, not 11px. The same face is used at 64px in the
+     battle overlay and at ~20px on the splash, and a fixed 11px radius on a
+     20px face is half its width — the dice were landing as circles. 17%
+     reproduces the old look at 64px and stays a die at every size. */
+  position:absolute;inset:0;border-radius:17%;
   background:linear-gradient(150deg,#fbf7ea,#e6dcc2);
   border:1px solid rgba(90,80,55,.30);
   box-shadow:inset 0 0 14px rgba(120,100,60,.22);
@@ -2326,7 +2330,19 @@ function renderLog(){
   }).join("");
   if(reviewing()){
     var at=el.querySelector(".ply.at");
-    if(at) at.scrollIntoView({block:"nearest"});
+    /* Scroll ONLY the move list. scrollIntoView() walks every scrollable
+       ancestor, the document included, so stepping back through a game was
+       dragging the whole page down to the log and pushing the board off
+       screen. Adjust this container's own scrollTop and nothing else. */
+    if(at){
+      var ar=at.getBoundingClientRect(), er=el.getBoundingClientRect();
+      var want = el.scrollTop + (ar.top - er.top) - (er.height - ar.height)/2;
+      el.scrollTop = Math.max(0, Math.min(want, el.scrollHeight - el.clientHeight));
+    } else {
+      /* Ply 0 — the starting position, before any move. Nothing is highlighted,
+         so put the log at the top where the game begins. */
+      el.scrollTop = 0;
+    }
   } else {
     el.scrollTop = el.scrollHeight;
   }
